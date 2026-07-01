@@ -11,7 +11,7 @@ import {
   Circle as CircleIcon, Minus, ArrowUpRight, Type, StickyNote,
   PanelRight, PenSquare, Copy, BringToFront, SendToBack, Lock,
   Eraser, Search as SearchIcon, Trash2, MessageSquarePlus,
-  Download, Monitor,
+  Download, Monitor, Hand,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getDocument, getAnnotations } from '@/lib/db';
@@ -134,16 +134,39 @@ usePinchZoom(mainScrollRef);
   }, [currentPage]);
 
   useEffect(() => {
+    let prevTool = useToolStore.getState().activeTool;
+
     function handleKeyDown(e: KeyboardEvent) {
       const isCtrl = e.ctrlKey || e.metaKey;
+      const active = document.activeElement;
+      const isTyping = active && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT');
+      if (isTyping) return;
+
+      if (e.code === 'Space' && !e.repeat) {
+        e.preventDefault();
+        prevTool = useToolStore.getState().activeTool;
+        setActiveTool('hand');
+        return;
+      }
       if (isCtrl && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
       else if (isCtrl && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
       else if (isCtrl && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelected(currentPage); }
       else if (isCtrl && e.key.toLowerCase() === 'f') { e.preventDefault(); setShowSearch(true); }
     }
+
+    function handleKeyUp(e: KeyboardEvent) {
+      if (e.code === 'Space') {
+        setActiveTool(prevTool as typeof activeTool);
+      }
+    }
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undo, redo, duplicateSelected, currentPage]);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [undo, redo, duplicateSelected, currentPage, setActiveTool]);
 
   // Memoized file object — Uint8Array is stable so this never spuriously changes
   const documentFile = useMemo(
@@ -231,6 +254,7 @@ usePinchZoom(mainScrollRef);
 
 const tools = [
     { id: 'select',      icon: <MousePointer2 className="h-4 w-4" />,     label: 'Select (V)' },
+    { id: 'hand',        icon: <Hand className="h-4 w-4" />,              label: 'Pan / Move (spacebar)' },
     { id: 'pen',         icon: <Pen className="h-4 w-4" />,               label: 'Pen (P)' },
     { id: 'highlighter', icon: <Highlighter className="h-4 w-4" />,       label: 'Highlighter (H)' },
     { id: 'eraser',      icon: <Eraser className="h-4 w-4" />,            label: 'Eraser (E)' },

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { saveDocument, getAllDocuments, deleteDocument } from '@/lib/db';
 import { ThemeToggle } from '@/components/theme-toggle';
-
+import { imageToPdf } from '@/lib/image-to-pdf';
 interface RecentDoc {
   id: string;
   fileName: string;
@@ -30,21 +30,38 @@ export default function HomePage() {
     loadRecent();
   }, []);
 
-  const handleFile = useCallback(
+ const handleFile = useCallback(
     async (file: File) => {
-      if (file.type !== 'application/pdf') {
-        alert('Please select a PDF file.');
+      const isPdf = file.type === 'application/pdf';
+      const isImage = ['image/jpeg', 'image/jpg', 'image/png'].includes(
+        file.type.toLowerCase()
+      );
+
+      if (!isPdf && !isImage) {
+        alert('Please select a PDF, JPG, or PNG file.');
         return;
       }
-      const fileData = await file.arrayBuffer();
+
+      let fileData: ArrayBuffer;
+      let fileName = file.name;
+
+      if (isImage) {
+        // Convert image to PDF
+        fileData = await imageToPdf(file);
+        // Give it a .pdf extension in the viewer
+        fileName = file.name.replace(/\.(jpg|jpeg|png)$/i, '.pdf');
+      } else {
+        fileData = await file.arrayBuffer();
+      }
+
       const id = crypto.randomUUID();
-      await saveDocument({ id, fileName: file.name, totalPages: 0, fileData });
+      await saveDocument({ id, fileName, totalPages: 0, fileData });
       router.push(`/viewer/${id}`);
     },
     [router]
   );
 
-  const onDrop = useCallback(
+ const onDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
       setIsDragging(false);
@@ -86,7 +103,7 @@ export default function HomePage() {
         <h1 className="text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
           Write on any PDF
           <br />
-          <span className="text-[#C8732A]">like it&apos;s paper.</span>
+          <span className="text-[#C8732A]">or image.</span>
         </h1>
         <p className="mt-5 max-w-xl text-base text-[#6B6862] sm:text-lg">
           Draw, highlight, and annotate instantly in your browser. Nothing
@@ -124,7 +141,7 @@ export default function HomePage() {
             <input
               id="pdf-upload"
               type="file"
-              accept="application/pdf"
+              accept="application/pdf,image/jpeg,image/jpg,image/png"
               onChange={onFileInput}
               className="hidden"
             />
@@ -136,7 +153,7 @@ export default function HomePage() {
             </Button>
           </div>
           <p className="mt-6 font-mono text-xs text-[#A8A49B]">
-            supports files up to 500mb · 1000+ pages
+            PDF, JPG, PNG · up to 500mb
           </p>
         </div>
 

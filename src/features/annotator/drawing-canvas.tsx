@@ -79,6 +79,7 @@ export function DrawingCanvas({ pageNumber, width, height, onExplainerDrawn }: D
   const isLineShapeTool = LINE_SHAPE_TOOLS.includes(activeTool);
   const isSelectTool = activeTool === 'select';
   const isEraserTool = activeTool === 'eraser';
+  const isHandTool = activeTool === 'hand';
   const canDraw = isStrokeTool || isBoxShapeTool || isLineShapeTool || isEraserTool;
 
   useEffect(() => {
@@ -416,8 +417,9 @@ const eraseAtPointer = useCallback(() => {
         position: 'absolute',
         top: 0,
         left: 0,
-        cursor: getToolCursor(activeTool),
+        cursor: isHandTool ? 'grab' : getToolCursor(activeTool),
         touchAction: canDraw || isSelectTool ? 'none' : 'pan-x pan-y',
+        pointerEvents: isHandTool ? 'none' : 'auto',
       }}
     >
       <Layer>

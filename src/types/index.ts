@@ -17,7 +17,8 @@ export type ToolType =
   | 'image'
   | 'signature'
   | 'eraser'
-  | 'explainer';
+  | 'explainer'
+  | 'hand';
 
 export interface Point {
   x: number;

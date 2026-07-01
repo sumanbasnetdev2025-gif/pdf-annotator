@@ -55,6 +55,8 @@ export function getToolCursor(tool: string): string {
     case 'text':
     case 'sticky-note':
       return TEXT_CURSOR;
+    case 'hand':
+      return 'grab';
     case 'select':
       return DEFAULT;
     default:
