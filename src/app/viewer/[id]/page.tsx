@@ -30,6 +30,7 @@ import { useAutosave } from '@/hooks/use-autosave';
 import {FloatingViewer} from '@/features/pip/floating-viewer';
 import { usePip } from '@/hooks/use-pip';
 import '@/lib/pdf-worker';
+import { bytesFor } from 'pdf-lib/cjs/utils/numbers';
 
 export default function ViewerPage() {
   const params = useParams<{ id: string }>();
@@ -93,7 +94,7 @@ const [fileData, setFileData] = useState<ArrayBuffer | null>(null);
 
     setFileData(doc.fileData);
 
-    const blob = new Blob([doc.fileData], {
+    const blob = new Blob([bytesFor.buffer as ArrayBuffer], {
       type: "application/pdf",
     });
 
