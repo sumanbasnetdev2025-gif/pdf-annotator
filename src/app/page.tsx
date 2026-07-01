@@ -69,8 +69,8 @@ export default function HomePage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#FAF9F6] text-[#1C1B1F] dark:bg-[#1C1B1F] dark:text-[#F5F3EE]">
-      <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-20">
+<main className="min-h-dvh bg-[#FAF9F6] text-[#1C1B1F] dark:bg-[#1C1B1F] dark:text-[#F5F3EE]">
+        <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-20">
         {/* Header row */}
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-2">

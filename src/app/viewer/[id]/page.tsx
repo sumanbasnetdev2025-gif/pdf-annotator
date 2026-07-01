@@ -246,7 +246,7 @@ const tools = [
   const nat = naturalPageSize.current;
 
   return (
-<div className="flex h-dvh flex-col bg-[#E8E6E0] dark:bg-[#1C1B1F]">
+<div className="flex h-dvh flex-col overflow-hidden bg-[#E8E6E0] dark:bg-[#1C1B1F]">
      {/* ── Toolbar ── */}
       <header className="sticky top-0 z-20 border-b border-[#D8D4CB] bg-white dark:border-[#3A3833] dark:bg-[#262420]">
         {/* Row 1: back, filename, utils */}
