@@ -29,6 +29,7 @@ import { exportAnnotatedPdf } from '@/lib/export-pdf';
 import { useAutosave } from '@/hooks/use-autosave';
 import {FloatingViewer} from '@/features/pip/floating-viewer';
 import { usePip } from '@/hooks/use-pip';
+import { usePinchZoom } from '@/hooks/use-pinch-zoom';
 import '@/lib/pdf-worker';
 import { bytesFor } from 'pdf-lib/cjs/utils/numbers';
 
@@ -55,6 +56,7 @@ const [fileData, setFileData] = useState<ArrayBuffer | null>(null);
   const [searchHighlights, setSearchHighlights] = useState<DOMRect[]>([]);
 
   const pageWrapperRef = useRef<HTMLDivElement>(null);
+  const mainScrollRef = useRef<HTMLDivElement>(null);
 
   const {
     currentPage, totalPages, zoomLevel, setFile, setCurrentPage,
@@ -76,6 +78,7 @@ const [fileData, setFileData] = useState<ArrayBuffer | null>(null);
   const loadAllAnnotations = useAnnotationStore((s) => s.loadAllAnnotations);
 
   useAutosave(params.id);
+usePinchZoom(mainScrollRef);
 
  useEffect(() => {
   async function load() {
@@ -243,8 +246,7 @@ const tools = [
   const nat = naturalPageSize.current;
 
   return (
-    <div className="flex h-screen flex-col bg-[#E8E6E0] dark:bg-[#1C1B1F]">
-
+<div className="flex h-dvh flex-col bg-[#E8E6E0] dark:bg-[#1C1B1F]">
      {/* ── Toolbar ── */}
       <header className="sticky top-0 z-20 border-b border-[#D8D4CB] bg-white dark:border-[#3A3833] dark:bg-[#262420]">
         {/* Row 1: back, filename, utils */}
@@ -362,7 +364,10 @@ const tools = [
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        <main className="flex flex-1 justify-center overflow-auto px-2 py-4 sm:px-8 sm:py-8">
+        <main
+            ref={mainScrollRef}
+            className="flex flex-1 justify-center overflow-auto px-2 py-4 sm:px-8 sm:py-8"
+          >
           {isLoading && (
             <div className="flex items-center gap-2 text-[#6B6862]">
               <Loader2 className="h-5 w-5 animate-spin" />

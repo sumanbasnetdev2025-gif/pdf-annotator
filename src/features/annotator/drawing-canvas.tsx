@@ -412,12 +412,12 @@ const eraseAtPointer = useCallback(() => {
       onTouchStart={handleStageMouseDown}
       onTouchMove={handlePointerMove}
       onTouchEnd={handlePointerUp}
-      style={{
+     style={{
         position: 'absolute',
         top: 0,
         left: 0,
         cursor: getToolCursor(activeTool),
-        touchAction: 'none',
+        touchAction: canDraw || isSelectTool ? 'none' : 'pan-x pan-y',
       }}
     >
       <Layer>

@@ -67,8 +67,8 @@ export default function WhiteboardPage() {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-[#E8E6E0]">
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-[#D8D4CB] bg-white px-4 py-2.5">
+<div className="flex h-dvh flex-col bg-[#E8E6E0] dark:bg-[#1C1B1F]">
+        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-[#D8D4CB] bg-white px-4 py-2.5">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => router.push('/')} aria-label="Back">
             <ArrowLeft className="h-4 w-4" />

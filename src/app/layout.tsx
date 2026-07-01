@@ -9,6 +9,10 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: '#C8732A',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -17,8 +21,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body className="overflow-hidden">{children}</body>
     </html>
   );
 }
