@@ -390,112 +390,105 @@ const tools = [
       <div className="flex flex-1 overflow-hidden">
         <main
             ref={mainScrollRef}
-            className="flex flex-1 justify-center overflow-auto px-2 py-4 sm:px-8 sm:py-8"
+            className="flex flex-1 overflow-auto px-2 py-4 sm:px-8 sm:py-8"
+            style={{ overscrollBehavior: 'contain' }}
           >
-          {isLoading && (
-            <div className="flex items-center gap-2 text-[#6B6862]">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Loading PDF…
-            </div>
-          )}
+            {isLoading && (
+              <div className="flex w-full items-center justify-center gap-2 text-[#6B6862]">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Loading PDF…
+              </div>
+            )}
 
-          {documentFile && (
-            <Document
-              file={documentFile}
-              onLoadSuccess={onDocumentLoadSuccess}
-              onLoadError={onDocumentLoadError}
-              loading={
-                <div className="flex items-center gap-2 text-[#6B6862]">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  Rendering…
-                </div>
-              }
-            >
-              {/* Page wrapper — position:relative so canvas overlays align */}
-              <div ref={pageWrapperRef} className="relative mx-auto rounded-md bg-white shadow-md">
-                <Page
-                  pageNumber={currentPage}
-                  scale={zoomLevel}
-                  renderAnnotationLayer={false}
-                  renderTextLayer={false}
-                  onRenderSuccess={onPageRenderSuccess}
-                />
-{/* Search highlight overlay */}
-                {searchHighlights.length > 0 && nat.width > 0 && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: nat.width * zoomLevel,
-                      height: nat.height * zoomLevel,
-                      pointerEvents: 'none',
-                      zIndex: 3,
-                    }}
-                  >
-                    {searchHighlights.map((rect, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          position: 'absolute',
-                          left: rect.x * zoomLevel,
-                          top: rect.y * zoomLevel,
-                          width: rect.width * zoomLevel,
-                          height: rect.height * zoomLevel,
-                          backgroundColor: 'rgba(255, 200, 0, 0.45)',
-                          borderRadius: 2,
-                        }}
-                      />
-                    ))}
+            <div className="mx-auto min-w-fit">
+              <Document
+                file={documentFile}
+                onLoadSuccess={onDocumentLoadSuccess}
+                onLoadError={onDocumentLoadError}
+                loading={
+                  <div className="flex items-center gap-2 text-[#6B6862]">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Rendering…
                   </div>
-                )}
-                {/*
-                  Canvas wrapper:
-                  - Sized to match the ZOOMED PDF page (same as the rendered canvas)
-                  - Inner content scaled DOWN to natural size, so annotation
-                    coordinates are always in zoom=1 pixel space
-                  - On re-zoom: PDF page resizes → onPageRenderSuccess fires →
-                    zoomLevel updates → scale recalculates → annotations stay aligned
-                */}
-                {canvasReady && nat.width > 0 && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: nat.width * zoomLevel,
-                      height: nat.height * zoomLevel,
-                      overflow: 'hidden',
-                    }}
-                  >
+                }
+              >
+                <div ref={pageWrapperRef} className="relative mx-auto rounded-md bg-white shadow-md">
+                  <Page
+                    pageNumber={currentPage}
+                    scale={zoomLevel}
+                    renderAnnotationLayer={false}
+                    renderTextLayer={false}
+                    onRenderSuccess={onPageRenderSuccess}
+                  />
+
+                  {searchHighlights.length > 0 && nat.width > 0 && (
                     <div
                       style={{
-                        transformOrigin: 'top left',
-                        transform: `scale(${zoomLevel})`,
-                        width: nat.width,
-                        height: nat.height,
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: nat.width * zoomLevel,
+                        height: nat.height * zoomLevel,
+                        pointerEvents: 'none',
+                        zIndex: 3,
                       }}
                     >
-                      <DrawingCanvas
-                        pageNumber={currentPage}
-                        width={nat.width}
-                        height={nat.height}
-                        onExplainerDrawn={handleExplainerDrawn}
-                      />
-                      <TextToolLayer
-                        pageNumber={currentPage}
-                        width={nat.width}
-                        height={nat.height}
-                        autoCreateAt={explainerPoint}
-                        onAutoCreateHandled={() => setExplainerPoint(null)}
-                      />
+                      {searchHighlights.map((rect, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            position: 'absolute',
+                            left: rect.x * zoomLevel,
+                            top: rect.y * zoomLevel,
+                            width: rect.width * zoomLevel,
+                            height: rect.height * zoomLevel,
+                            backgroundColor: 'rgba(255, 200, 0, 0.45)',
+                            borderRadius: 2,
+                          }}
+                        />
+                      ))}
                     </div>
-                  </div>
-                )}
-              </div>
-            </Document>
-          )}
-        </main>
+                  )}
+
+                  {canvasReady && nat.width > 0 && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: nat.width * zoomLevel,
+                        height: nat.height * zoomLevel,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div
+                        style={{
+                          transformOrigin: 'top left',
+                          transform: `scale(${zoomLevel})`,
+                          width: nat.width,
+                          height: nat.height,
+                        }}
+                      >
+                        <DrawingCanvas
+                          pageNumber={currentPage}
+                          width={nat.width}
+                          height={nat.height}
+                          onExplainerDrawn={handleExplainerDrawn}
+                        />
+                        <TextToolLayer
+                          pageNumber={currentPage}
+                          width={nat.width}
+                          height={nat.height}
+                          autoCreateAt={explainerPoint}
+                          onAutoCreateHandled={() => setExplainerPoint(null)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Document>
+            </div>
+          </main>
 
         {showSidebar && (
           <AnnotationSidebar onClose={() => setShowSidebar(false)} />
