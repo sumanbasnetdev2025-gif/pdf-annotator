@@ -367,11 +367,10 @@ const eraseAtPointer = useCallback(() => {
         ref: registerRef(shape.id),
         draggable,
         onClick: (e: Konva.KonvaEventObject<MouseEvent>) => handleShapeClick(shape.id, e),
-        onTap: (e: Konva.KonvaEventObject<MouseEvent>) => handleShapeClick(shape.id, e),
+        onTap: (e: Konva.KonvaEventObject<TouchEvent>) => handleShapeClick(shape.id, e as unknown as Konva.KonvaEventObject<MouseEvent>),
         onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => handleDragEnd(shape.id, e),
         onTransformEnd: (e: Konva.KonvaEventObject<Event>) => handleTransformEnd(shape.id, e),
       };
-
       if (shape.type === 'rectangle') {
         return (
           <Rect key={shape.id} {...commonProps} x={shape.x} y={shape.y} width={shape.width} height={shape.height}

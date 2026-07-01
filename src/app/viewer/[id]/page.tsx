@@ -94,9 +94,10 @@ const [fileData, setFileData] = useState<ArrayBuffer | null>(null);
 
     setFileData(doc.fileData);
 
-    const blob = new Blob([bytesFor.buffer as ArrayBuffer], {
+    const blob = new Blob([doc. fileData], {
       type: "application/pdf",
     });
+    setPdfUrl(URL.createObjectURL(blob));
 
     const url = URL.createObjectURL(blob);
     setPdfUrl(url);
@@ -207,7 +208,7 @@ const [fileData, setFileData] = useState<ArrayBuffer | null>(null);
       annotationsByPage,
       pageHeights
     );
-    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
