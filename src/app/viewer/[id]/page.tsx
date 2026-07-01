@@ -512,6 +512,7 @@ const tools = [
             setShowPip(false);
             window.focus();
           }}
+          onClose={() => setShowPip(false)}
         />
       )}
     </div>
