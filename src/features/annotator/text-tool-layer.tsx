@@ -235,28 +235,27 @@ export function TextToolLayer({
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
                 style={{
-                  width: '100%',
-                  minHeight: ann.height,
-                  fontSize: ann.fontSize,
-                  fontFamily: ann.fontFamily,
-                  color: ann.color,
-                  backgroundColor:
-                    ann.backgroundColor || 'rgba(255,255,255,0.9)',
-                  fontWeight: ann.bold ? 'bold' : 'normal',
-                  fontStyle: ann.italic ? 'italic' : 'normal',
-                  textDecoration: ann.underline ? 'underline' : 'none',
-                  textAlign: ann.align,
-                  border: '1px dashed #C8732A',
-                  borderRadius: 4,
-                  padding: 6,
-                  resize: 'both',
-                  outline: 'none',
-                  fontSize: ann.fontSize < 16 ? 16 : ann.fontSize,
-                  lineHeight: `${Math.max(28, ann.fontSize * 1.5)}px`,
-                  boxSizing: 'border-box',
-                  whiteSpace: 'pre',
-                  overflowX: 'auto',
-                }}
+  width: '100%',
+  minHeight: ann.height,
+  fontFamily: ann.fontFamily,
+  color: ann.color,
+  backgroundColor:
+    ann.backgroundColor || 'rgba(255,255,255,0.9)',
+  fontWeight: ann.bold ? 'bold' : 'normal',
+  fontStyle: ann.italic ? 'italic' : 'normal',
+  textDecoration: ann.underline ? 'underline' : 'none',
+  textAlign: ann.align,
+  border: '1px dashed #C8732A',
+  borderRadius: 4,
+  padding: 6,
+  resize: 'both',
+  outline: 'none',
+  fontSize: ann.fontSize < 16 ? 16 : ann.fontSize,
+  lineHeight: `${Math.max(28, ann.fontSize * 1.5)}px`,
+  boxSizing: 'border-box',
+  whiteSpace: 'pre',
+  overflowX: 'auto',
+}}
               />
             ) : (
              <div

@@ -9,17 +9,16 @@ import {
   Redo2,
   Trash2,
   Type,
+  Divide,
 } from 'lucide-react';
 import { useToolStore } from '@/store/tool-store';
 import { useAnnotationStore } from '@/store/annotation-store';
 import { Button } from '@/components/ui/button';
 import { brightenHex } from '@/lib/utils';
-import { Divide } from 'lucide-react';
 
 interface Props {
   pageNumber: number;
-    onDivisionTextOpen?: () => void;   // ← new
-
+  onDivisionTextOpen?: () => void;
 }
 
 const DRAW_TOOLS = [
@@ -28,7 +27,7 @@ const DRAW_TOOLS = [
   { id: 'highlighter', label: 'Highlighter', Icon: Highlighter },
   { id: 'text', label: 'Text', Icon: Type },
   { id: 'eraser', label: 'Eraser', Icon: Eraser },
-  { id: 'division-text', label: 'Division text', Icon: Divide },  // ← new
+  { id: 'division-text', label: 'Division text', Icon: Divide },
 ] as const;
 
 const PALETTE = [
@@ -70,30 +69,38 @@ export function MathToolbar({ pageNumber, onDivisionTextOpen }: Props) {
     setColor(brightenHex(raw, brightenAmount));
   };
 
-const handleToolClick = (id: (typeof DRAW_TOOLS)[number]['id']) => {
-  setActiveTool(id);
-  if (id === 'pen') setStrokeWidth(4);
-  if (id === 'highlighter') setStrokeWidth(4);
-  if (id === 'division-text') onDivisionTextOpen?.();
-};
+  const handleToolClick = (id: (typeof DRAW_TOOLS)[number]['id']) => {
+    // 'division-text' is a one-shot action, not a drawing tool.
+    // Do NOT pass it to setActiveTool (it isn't a valid ToolType).
+    if (id === 'division-text') {
+      onDivisionTextOpen?.();
+      return;
+    }
+    setActiveTool(id);
+    if (id === 'pen') setStrokeWidth(4);
+    if (id === 'highlighter') setStrokeWidth(4);
+  };
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-3 z-40 flex justify-center px-3">
       <div className="pointer-events-auto flex w-full max-w-2xl flex-col gap-1 rounded-2xl border border-[#D8D4CB] bg-white/95 px-1.5 py-1.5 shadow-lg backdrop-blur dark:border-[#3A3833] dark:bg-[#26242A]/95">
         {/* Tool row */}
         <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-none">
-          {DRAW_TOOLS.map(({ id, label, Icon }) => (
-            <Button
-              key={id}
-              variant={activeTool === id ? 'default' : 'ghost'}
-              size="icon"
-              onClick={() => handleToolClick(id)}
-              aria-label={label}
-              className="shrink-0"
-            >
-              <Icon className="h-4 w-4" />
-            </Button>
-          ))}
+          {DRAW_TOOLS.map(({ id, label, Icon }) => {
+            const isActive = id === 'division-text' ? false : activeTool === id;
+            return (
+              <Button
+                key={id}
+                variant={isActive ? 'default' : 'ghost'}
+                size="icon"
+                onClick={() => handleToolClick(id)}
+                aria-label={label}
+                className="shrink-0"
+              >
+                <Icon className="h-4 w-4" />
+              </Button>
+            );
+          })}
 
           <div className="mx-1 h-6 w-px shrink-0 bg-[#D8D4CB] dark:bg-[#3A3833]" />
 
