@@ -145,4 +145,9 @@
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
+/* Math whiteboard: force pointer pass-through on the Konva overlay */
+.math-pen-overlay[data-passthrough='true'],
+.math-pen-overlay[data-passthrough='true'] * {
+  pointer-events: none !important;
+}
 }

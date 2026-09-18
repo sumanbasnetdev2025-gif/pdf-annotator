@@ -38,11 +38,48 @@ export default function WhiteboardPage() {
 
   useEffect(() => {
     function updateSize() {
-      setSize({ width: window.innerWidth, height: window.innerHeight - 112 });
+      // Use visualViewport if available for more accurate mobile sizing
+      const vv = window.visualViewport;
+      const width = vv ? vv.width : window.innerWidth;
+      const height = vv ? vv.height : window.innerHeight;
+
+      // Header height differs across breakpoints; measure dynamically if possible
+      const header = document.querySelector('header');
+      const headerHeight = header ? header.getBoundingClientRect().height : 56;
+
+      // ToolSettingsPanel may or may not render; measure dynamically
+      const settingsPanel = document.querySelector('[data-tool-settings-panel]');
+      const settingsHeight = settingsPanel
+        ? settingsPanel.getBoundingClientRect().height
+        : 0;
+
+      setSize({
+        width: Math.floor(width),
+        height: Math.max(0, Math.floor(height - headerHeight - settingsHeight)),
+      });
     }
+
     updateSize();
     window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
+    window.addEventListener('orientationchange', updateSize);
+    window.visualViewport?.addEventListener('resize', updateSize);
+    window.visualViewport?.addEventListener('scroll', updateSize);
+
+    // Recompute when DOM changes (e.g., settings panel opens/closes)
+    const observer = new MutationObserver(updateSize);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+    });
+
+    return () => {
+      window.removeEventListener('resize', updateSize);
+      window.removeEventListener('orientationchange', updateSize);
+      window.visualViewport?.removeEventListener('resize', updateSize);
+      window.visualViewport?.removeEventListener('scroll', updateSize);
+      observer.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -51,7 +88,11 @@ export default function WhiteboardPage() {
       if (isCtrl && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo();
-      } else if (isCtrl && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
+      } else if (
+        isCtrl &&
+        (e.key.toLowerCase() === 'y' ||
+          (e.key.toLowerCase() === 'z' && e.shiftKey))
+      ) {
         e.preventDefault();
         redo();
       }
@@ -67,112 +108,135 @@ export default function WhiteboardPage() {
   };
 
   return (
-<div className="flex h-dvh flex-col overflow-hidden bg-[#E8E6E0] dark:bg-[#1C1B1F]">
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-[#D8D4CB] bg-white px-4 py-2.5">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/')} aria-label="Back">
-            <ArrowLeft className="h-4 w-4" />
+    <div className="flex h-dvh flex-col overflow-hidden bg-[#E8E6E0] dark:bg-[#1C1B1F]">
+      {/* Header */}
+      <header className="sticky top-0 z-20 flex flex-col gap-2 border-b border-[#D8D4CB] bg-white px-2 py-2 sm:px-4 sm:py-2.5 dark:border-[#3A3833] dark:bg-[#26242A]">
+        {/* Top row: back + title + clear */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push('/')}
+              aria-label="Back"
+              className="shrink-0"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <span className="truncate text-sm font-medium text-[#1C1B1F] dark:text-[#E8E6E0]">
+              Whiteboard
+            </span>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={clearBoard}
+            aria-label="Clear board"
+            className="shrink-0"
+          >
+            <Trash2 className="h-4 w-4 text-[#D62828]" />
           </Button>
-          <span className="text-sm font-medium text-[#1C1B1F]">Whiteboard</span>
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center">
-          <div className="flex w-full items-center gap-0.5 overflow-x-auto rounded-lg border border-[#D8D4CB] p-0.5 scrollbar-none dark:border-[#3A3833]">
-            <Button 
-              variant={activeTool === 'select' ? 'default' : 'ghost'} 
-              size="icon" 
-              onClick={() => setActiveTool('select')} 
+        {/* Toolbar: horizontally scrollable on small screens */}
+        <div className="w-full overflow-x-auto scrollbar-none">
+          <div className="flex w-max items-center gap-0.5 rounded-lg border border-[#D8D4CB] p-0.5 dark:border-[#3A3833]">
+            <Button
+              variant={activeTool === 'select' ? 'default' : 'ghost'}
+              size="icon"
+              onClick={() => setActiveTool('select')}
               aria-label="Select"
               className="shrink-0"
             >
               <MousePointer2 className="h-4 w-4" />
             </Button>
-            <Button 
-              variant={activeTool === 'pen' ? 'default' : 'ghost'} 
-              size="icon" 
-              onClick={() => setActiveTool('pen')} 
+            <Button
+              variant={activeTool === 'pen' ? 'default' : 'ghost'}
+              size="icon"
+              onClick={() => setActiveTool('pen')}
               aria-label="Pen"
               className="shrink-0"
             >
               <Pen className="h-4 w-4" />
             </Button>
-            <Button 
-              variant={activeTool === 'highlighter' ? 'default' : 'ghost'} 
-              size="icon" 
-              onClick={() => setActiveTool('highlighter')} 
+            <Button
+              variant={activeTool === 'highlighter' ? 'default' : 'ghost'}
+              size="icon"
+              onClick={() => setActiveTool('highlighter')}
               aria-label="Highlighter"
               className="shrink-0"
             >
               <Highlighter className="h-4 w-4" />
             </Button>
-            <Button 
-              variant={activeTool === 'rectangle' ? 'default' : 'ghost'} 
-              size="icon" 
-              onClick={() => setActiveTool('rectangle')} 
+            <Button
+              variant={activeTool === 'rectangle' ? 'default' : 'ghost'}
+              size="icon"
+              onClick={() => setActiveTool('rectangle')}
               aria-label="Rectangle"
               className="shrink-0"
             >
               <Square className="h-4 w-4" />
             </Button>
-            <Button 
-              variant={activeTool === 'circle' ? 'default' : 'ghost'} 
-              size="icon" 
-              onClick={() => setActiveTool('circle')} 
+            <Button
+              variant={activeTool === 'circle' ? 'default' : 'ghost'}
+              size="icon"
+              onClick={() => setActiveTool('circle')}
               aria-label="Circle"
               className="shrink-0"
             >
               <CircleIcon className="h-4 w-4" />
             </Button>
-            <Button 
-              variant={activeTool === 'line' ? 'default' : 'ghost'} 
-              size="icon" 
-              onClick={() => setActiveTool('line')} 
+            <Button
+              variant={activeTool === 'line' ? 'default' : 'ghost'}
+              size="icon"
+              onClick={() => setActiveTool('line')}
               aria-label="Line"
               className="shrink-0"
             >
               <Minus className="h-4 w-4" />
             </Button>
-            <Button 
-              variant={activeTool === 'arrow' ? 'default' : 'ghost'} 
-              size="icon" 
-              onClick={() => setActiveTool('arrow')} 
+            <Button
+              variant={activeTool === 'arrow' ? 'default' : 'ghost'}
+              size="icon"
+              onClick={() => setActiveTool('arrow')}
               aria-label="Arrow"
               className="shrink-0"
             >
               <ArrowUpRight className="h-4 w-4" />
             </Button>
-            <Button 
-              variant={activeTool === 'text' ? 'default' : 'ghost'} 
-              size="icon" 
-              onClick={() => setActiveTool('text')} 
+            <Button
+              variant={activeTool === 'text' ? 'default' : 'ghost'}
+              size="icon"
+              onClick={() => setActiveTool('text')}
               aria-label="Text"
               className="shrink-0"
             >
               <Type className="h-4 w-4" />
             </Button>
-            <Button 
-              variant={activeTool === 'sticky-note' ? 'default' : 'ghost'} 
-              size="icon" 
-              onClick={() => setActiveTool('sticky-note')} 
+            <Button
+              variant={activeTool === 'sticky-note' ? 'default' : 'ghost'}
+              size="icon"
+              onClick={() => setActiveTool('sticky-note')}
               aria-label="Sticky note"
               className="shrink-0"
             >
               <StickyNote className="h-4 w-4" />
             </Button>
-            <div className="mx-1 h-5 w-px shrink-0 bg-[#D8D4CB]" />
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={undo} 
+            <div className="mx-1 h-5 w-px shrink-0 bg-[#D8D4CB] dark:bg-[#3A3833]" />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={undo}
               aria-label="Undo"
               className="shrink-0"
             >
               <Undo2 className="h-4 w-4" />
             </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={redo} 
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={redo}
               aria-label="Redo"
               className="shrink-0"
             >
@@ -180,22 +244,29 @@ export default function WhiteboardPage() {
             </Button>
           </div>
         </div>
-
-        <Button variant="ghost" size="icon" onClick={clearBoard} aria-label="Clear board">
-          <Trash2 className="h-4 w-4 text-[#D62828]" />
-        </Button>
       </header>
 
-      <ToolSettingsPanel />
+      {/* Tool settings panel — wraps it with data attribute for measuring */}
+      <div data-tool-settings-panel>
+        <ToolSettingsPanel />
+      </div>
 
       <main className="relative flex-1 overflow-hidden">
-        {size.width > 0 && (
+        {size.width > 0 && size.height > 0 && (
           <div
-            className="relative mx-auto bg-white shadow-inner"
+            className="relative mx-auto bg-white shadow-inner dark:bg-white"
             style={{ width: size.width, height: size.height }}
           >
-            <DrawingCanvas pageNumber={WHITEBOARD_PAGE} width={size.width} height={size.height} />
-            <TextToolLayer pageNumber={WHITEBOARD_PAGE} width={size.width} height={size.height} />
+            <DrawingCanvas
+              pageNumber={WHITEBOARD_PAGE}
+              width={size.width}
+              height={size.height}
+            />
+            <TextToolLayer
+              pageNumber={WHITEBOARD_PAGE}
+              width={size.width}
+              height={size.height}
+            />
           </div>
         )}
       </main>

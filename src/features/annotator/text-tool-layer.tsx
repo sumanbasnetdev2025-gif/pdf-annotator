@@ -36,7 +36,7 @@ export function TextToolLayer({
   );
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  // maps noteId -> linked arrowId (for explainer tool)
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const linkedArrows = useRef<Record<string, string>>({});
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -45,10 +45,21 @@ export function TextToolLayer({
   }, [editingId]);
 
   useEffect(() => {
+    if (!selectedId) return;
+    const handleDocPointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('[data-note-root]')) return;
+      setSelectedId(null);
+    };
+    document.addEventListener('pointerdown', handleDocPointerDown);
+    return () =>
+      document.removeEventListener('pointerdown', handleDocPointerDown);
+  }, [selectedId]);
+
+  useEffect(() => {
     if (!autoCreateAt) return;
     const id = crypto.randomUUID();
 
-    // remember which arrow this note is linked to
     linkedArrows.current[id] = autoCreateAt.arrowId;
 
     const newText: TextAnnotation = {
@@ -82,13 +93,13 @@ export function TextToolLayer({
 
   const handleDelete = useCallback(
     (ann: TextAnnotation) => {
-      // if this note was created by the explainer tool, also delete its arrow
       const arrowId = linkedArrows.current[ann.id];
       if (arrowId) {
         deleteAnnotation(pageNumber, arrowId);
         delete linkedArrows.current[ann.id];
       }
       deleteAnnotation(pageNumber, ann.id);
+      setSelectedId((cur) => (cur === ann.id ? null : cur));
     },
     [pageNumber, deleteAnnotation]
   );
@@ -129,6 +140,7 @@ export function TextToolLayer({
       };
       addAnnotation(pageNumber, newText);
       setEditingId(id);
+      setSelectedId(id);
     },
     [activeTool, color, fontSize, pageNumber, annotations.length, addAnnotation]
   );
@@ -155,88 +167,136 @@ export function TextToolLayer({
         cursor: getToolCursor(activeTool),
         pointerEvents: isTextMode || annotations.length > 0 ? 'auto' : 'none',
         zIndex: 5,
+        touchAction: isTextMode ? 'manipulation' : 'auto',
       }}
     >
-      {annotations.map((ann) => (
-        <div
-          key={ann.id}
-          className="group"
-          style={{
-            position: 'absolute',
-            left: ann.x,
-            top: ann.y,
-            width: ann.width,
-            minHeight: ann.height,
-          }}
-          onDoubleClick={(e) => {
-            e.stopPropagation();
-            setEditingId(ann.id);
-          }}
-        >
-          {/* delete button — also removes linked arrow for explainer notes */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDelete(ann);
-            }}
-            aria-label="Delete note"
-            className="absolute -right-2 -top-2 z-10 hidden h-5 w-5 items-center justify-center rounded-full bg-[#D62828] text-white group-hover:flex"
-          >
-            <X className="h-3 w-3" />
-          </button>
+      {annotations.map((ann) => {
+        const isSelected = selectedId === ann.id;
+        const isEditing = editingId === ann.id;
 
-          {editingId === ann.id ? (
-            <textarea
-              ref={inputRef}
-              value={ann.text}
-              onChange={(e) =>
-                updateAnnotation(pageNumber, ann.id, { text: e.target.value })
+        return (
+          <div
+            key={ann.id}
+            data-note-root
+            className="group"
+            style={{
+              position: 'absolute',
+              left: ann.x,
+              top: ann.y,
+              width: ann.width,
+              minHeight: ann.height,
+              outline: isSelected && !isEditing ? '2px solid #C8732A' : 'none',
+              outlineOffset: 2,
+              borderRadius: 6,
+            }}
+            onPointerDown={(e) => {
+              if (!isEditing) {
+                setSelectedId(ann.id);
               }
-              onBlur={() => handleBlur(ann)}
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                width: '100%',
-                minHeight: ann.height,
-                fontSize: ann.fontSize,
-                fontFamily: ann.fontFamily,
-                color: ann.color,
-                backgroundColor: ann.backgroundColor || 'rgba(255,255,255,0.9)',
-                fontWeight: ann.bold ? 'bold' : 'normal',
-                fontStyle: ann.italic ? 'italic' : 'normal',
-                textDecoration: ann.underline ? 'underline' : 'none',
-                textAlign: ann.align,
-                border: '1px dashed #C8732A',
-                borderRadius: 4,
-                padding: 6,
-                resize: 'both',
-                outline: 'none',
+              e.stopPropagation();
+            }}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              setEditingId(ann.id);
+              setSelectedId(ann.id);
+            }}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(ann);
               }}
-            />
-          ) : (
-            <div
-              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+              }}
+              aria-label="Delete note"
+              className={[
+                'absolute -right-2 -top-2 z-10 h-6 w-6 items-center justify-center rounded-full bg-[#D62828] text-white shadow-md transition-opacity',
+                'opacity-0 pointer-events-none',
+                'group-hover:opacity-100 group-hover:pointer-events-auto',
+                isSelected ? '!opacity-100 !pointer-events-auto' : '',
+                'flex',
+              ].join(' ')}
               style={{
-                width: '100%',
-                minHeight: ann.height,
-                fontSize: ann.fontSize,
-                fontFamily: ann.fontFamily,
-                color: ann.color,
-                backgroundColor: ann.backgroundColor || 'transparent',
-                fontWeight: ann.bold ? 'bold' : 'normal',
-                fontStyle: ann.italic ? 'italic' : 'normal',
-                textDecoration: ann.underline ? 'underline' : 'none',
-                textAlign: ann.align,
-                padding: 6,
-                borderRadius: 4,
-                whiteSpace: 'pre-wrap',
-                cursor: 'text',
+                transform: 'translateZ(0)',
               }}
             >
-              {ann.text || ' '}
-            </div>
-          )}
-        </div>
-      ))}
+              <X className="h-3.5 w-3.5" />
+            </button>
+
+            {isEditing ? (
+              <textarea
+                ref={inputRef}
+                value={ann.text}
+                onChange={(e) =>
+                  updateAnnotation(pageNumber, ann.id, { text: e.target.value })
+                }
+                onBlur={() => handleBlur(ann)}
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                style={{
+                  width: '100%',
+                  minHeight: ann.height,
+                  fontSize: ann.fontSize,
+                  fontFamily: ann.fontFamily,
+                  color: ann.color,
+                  backgroundColor:
+                    ann.backgroundColor || 'rgba(255,255,255,0.9)',
+                  fontWeight: ann.bold ? 'bold' : 'normal',
+                  fontStyle: ann.italic ? 'italic' : 'normal',
+                  textDecoration: ann.underline ? 'underline' : 'none',
+                  textAlign: ann.align,
+                  border: '1px dashed #C8732A',
+                  borderRadius: 4,
+                  padding: 6,
+                  resize: 'both',
+                  outline: 'none',
+                  fontSize: ann.fontSize < 16 ? 16 : ann.fontSize,
+                  lineHeight: `${Math.max(28, ann.fontSize * 1.5)}px`,
+                  boxSizing: 'border-box',
+                  whiteSpace: 'pre',
+                  overflowX: 'auto',
+                }}
+              />
+            ) : (
+             <div
+  onClick={(e) => e.stopPropagation()}
+  style={{
+    width: '100%',
+    minHeight: ann.height,
+    fontSize: ann.fontSize,
+    fontFamily: ann.fontFamily,
+    color: ann.color,
+    backgroundColor: ann.backgroundColor || 'transparent',
+    fontWeight: ann.bold ? 'bold' : 'normal',
+    fontStyle: ann.italic ? 'italic' : 'normal',
+    textDecoration: ann.underline ? 'underline' : 'none',
+    textAlign: ann.align,
+    padding: 6,
+    borderRadius: 4,
+    cursor: 'text',
+    boxSizing: 'border-box',
+    overflow: 'visible',
+  }}
+>
+  {(ann.text || ' ').split('\n').map((line, index) => (
+    <div
+      key={`${ann.id}-line-${index}`}
+      style={{
+        height: `${Math.max(28, ann.fontSize * 1.5)}px`,
+        lineHeight: `${Math.max(28, ann.fontSize * 1.5)}px`,
+        whiteSpace: 'pre',
+        overflow: 'visible',
+      }}
+    >
+      {line || '\u00A0'}
+    </div>
+  ))}
+</div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

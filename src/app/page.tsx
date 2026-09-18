@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Upload, FileText, Wifi, Lock, Zap, PenSquare,
   Clock, Trash2, Link as LinkIcon, Loader2, ArrowUpRight,
+  Calculator,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -243,7 +244,31 @@ export default function HomePage() {
             Start a blank whiteboard
           </button>
         </div>
-
+        
+{/* Math Whiteboard card */}
+<div className="mt-8">
+  <button
+    onClick={() => router.push('/math-whiteboard')}
+    className="group flex w-full items-center justify-between rounded-xl border border-[#D8D4CB] bg-white p-4 text-left transition-all hover:border-[#C8732A] hover:shadow-md dark:border-[#3A3833] dark:bg-[#262420]"
+  >
+    <div>
+      <div className="flex items-center gap-2">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#C8732A]/10">
+          <Calculator className="h-4 w-4 text-[#C8732A]" />
+        </div>
+        <p className="font-medium text-[#1C1B1F] dark:text-[#F5F3EE]">
+          Math Whiteboard
+        </p>
+      </div>
+      <p className="mt-1 text-xs text-[#6B6862]">
+        Generate tables, addition, subtraction & division practice
+      </p>
+    </div>
+    <div className="ml-4 shrink-0 text-[#C8732A] opacity-0 transition-opacity group-hover:opacity-100">
+      <ArrowUpRight className="h-5 w-5" />
+    </div>
+  </button>
+</div>
         {/* PDF Tools card */}
         <div className="mt-8">
           <a
