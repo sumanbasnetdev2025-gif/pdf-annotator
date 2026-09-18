@@ -24,94 +24,232 @@ import { DrawingCanvas } from '@/features/annotator/drawing-canvas';
 import { TextToolLayer } from '@/features/annotator/text-tool-layer';
 import { ToolSettingsPanel } from '@/features/annotator/tool-settings-panel';
 
-const WHITEBOARD_PAGE = 1; // whiteboard uses a single fixed "page" in the annotation store
+const WHITEBOARD_PAGE = 1;
+
+const PASS_THROUGH_TOOLS = [
+  'select',
+  'text',
+  'sticky-note',
+  'hand',
+];
 
 export default function WhiteboardPage() {
   const router = useRouter();
-  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  const [size, setSize] = useState({
+    width: 0,
+    height: 0,
+  });
 
   const activeTool = useToolStore((s) => s.activeTool);
   const setActiveTool = useToolStore((s) => s.setActiveTool);
+
   const undo = useAnnotationStore((s) => s.undo);
   const redo = useAnnotationStore((s) => s.redo);
-  const setAnnotationsForPage = useAnnotationStore((s) => s.setAnnotationsForPage);
 
+  const setAnnotationsForPage = useAnnotationStore(
+    (s) => s.setAnnotationsForPage
+  );
+
+  const penActive = !PASS_THROUGH_TOOLS.includes(activeTool);
+
+  const textActive =
+    activeTool === 'text' || activeTool === 'sticky-note';
+
+  // ------------------------------------------------------------
+  // Calculate whiteboard size
+  // ------------------------------------------------------------
   useEffect(() => {
     function updateSize() {
-      // Use visualViewport if available for more accurate mobile sizing
       const vv = window.visualViewport;
-      const width = vv ? vv.width : window.innerWidth;
-      const height = vv ? vv.height : window.innerHeight;
 
-      // Header height differs across breakpoints; measure dynamically if possible
+      const viewportWidth = vv
+        ? vv.width
+        : window.innerWidth;
+
+      const viewportHeight = vv
+        ? vv.height
+        : window.innerHeight;
+
       const header = document.querySelector('header');
-      const headerHeight = header ? header.getBoundingClientRect().height : 56;
 
-      // ToolSettingsPanel may or may not render; measure dynamically
-      const settingsPanel = document.querySelector('[data-tool-settings-panel]');
+      const headerHeight = header
+        ? header.getBoundingClientRect().height
+        : 56;
+
+      const settingsPanel = document.querySelector(
+        '[data-tool-settings-panel]'
+      ) as HTMLElement | null;
+
       const settingsHeight = settingsPanel
         ? settingsPanel.getBoundingClientRect().height
         : 0;
 
       setSize({
-        width: Math.floor(width),
-        height: Math.max(0, Math.floor(height - headerHeight - settingsHeight)),
+        width: Math.floor(viewportWidth),
+        height: Math.max(
+          0,
+          Math.floor(
+            viewportHeight -
+              headerHeight -
+              settingsHeight
+          )
+        ),
       });
     }
 
     updateSize();
-    window.addEventListener('resize', updateSize);
-    window.addEventListener('orientationchange', updateSize);
-    window.visualViewport?.addEventListener('resize', updateSize);
-    window.visualViewport?.addEventListener('scroll', updateSize);
 
-    // Recompute when DOM changes (e.g., settings panel opens/closes)
-    const observer = new MutationObserver(updateSize);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-    });
+    let raf = 0;
+
+    function scheduleUpdate() {
+      cancelAnimationFrame(raf);
+
+      raf = requestAnimationFrame(() => {
+        updateSize();
+      });
+    }
+
+    window.addEventListener(
+      'resize',
+      scheduleUpdate
+    );
+
+    window.addEventListener(
+      'orientationchange',
+      scheduleUpdate
+    );
+
+    window.visualViewport?.addEventListener(
+      'resize',
+      scheduleUpdate
+    );
+
+    const ro = new ResizeObserver(scheduleUpdate);
+
+    const settingsPanel = document.querySelector(
+      '[data-tool-settings-panel]'
+    ) as HTMLElement | null;
+
+    if (settingsPanel) {
+      ro.observe(settingsPanel);
+    }
 
     return () => {
-      window.removeEventListener('resize', updateSize);
-      window.removeEventListener('orientationchange', updateSize);
-      window.visualViewport?.removeEventListener('resize', updateSize);
-      window.visualViewport?.removeEventListener('scroll', updateSize);
-      observer.disconnect();
+      cancelAnimationFrame(raf);
+
+      window.removeEventListener(
+        'resize',
+        scheduleUpdate
+      );
+
+      window.removeEventListener(
+        'orientationchange',
+        scheduleUpdate
+      );
+
+      window.visualViewport?.removeEventListener(
+        'resize',
+        scheduleUpdate
+      );
+
+      ro.disconnect();
     };
   }, []);
 
+  // ------------------------------------------------------------
+  // Keyboard shortcuts
+  // ------------------------------------------------------------
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const isCtrl = e.ctrlKey || e.metaKey;
-      if (isCtrl && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+      const key = e.key.toLowerCase();
+
+      if (
+        isCtrl &&
+        key === 'z' &&
+        !e.shiftKey
+      ) {
         e.preventDefault();
         undo();
-      } else if (
+        return;
+      }
+
+      if (
         isCtrl &&
-        (e.key.toLowerCase() === 'y' ||
-          (e.key.toLowerCase() === 'z' && e.shiftKey))
+        (
+          key === 'y' ||
+          (key === 'z' && e.shiftKey)
+        )
       ) {
         e.preventDefault();
         redo();
       }
     }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undo, redo]);
 
+    window.addEventListener(
+      'keydown',
+      handleKeyDown
+    );
+
+    return () => {
+      window.removeEventListener(
+        'keydown',
+        handleKeyDown
+      );
+    };
+  }, [undo, redo]);
+// Reset the active tool to a sane default every time this page mounts.
+useEffect(() => {
+  setActiveTool('pen');
+}, [setActiveTool]);
+  // ------------------------------------------------------------
+  // Clear board
+  // ------------------------------------------------------------
   const clearBoard = () => {
-    if (confirm('Clear the whole whiteboard? This cannot be undone.')) {
-      setAnnotationsForPage(WHITEBOARD_PAGE, []);
+    if (
+      confirm(
+        'Clear the whole whiteboard? This cannot be undone.'
+      )
+    ) {
+      setAnnotationsForPage(
+        WHITEBOARD_PAGE,
+        []
+      );
     }
   };
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-[#E8E6E0] dark:bg-[#1C1B1F]">
+    <div
+      className="
+        flex
+        h-dvh
+        flex-col
+        overflow-hidden
+        bg-[#E8E6E0]
+        dark:bg-[#1C1B1F]
+      "
+    >
       {/* Header */}
-      <header className="sticky top-0 z-20 flex flex-col gap-2 border-b border-[#D8D4CB] bg-white px-2 py-2 sm:px-4 sm:py-2.5 dark:border-[#3A3833] dark:bg-[#26242A]">
-        {/* Top row: back + title + clear */}
+      <header
+        className="
+          sticky
+          top-0
+          z-30
+          flex
+          flex-col
+          gap-2
+          border-b
+          border-[#D8D4CB]
+          bg-white
+          px-2
+          py-2
+          sm:px-4
+          sm:py-2.5
+          dark:border-[#3A3833]
+          dark:bg-[#26242A]
+        "
+      >
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <Button
@@ -123,7 +261,16 @@ export default function WhiteboardPage() {
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <span className="truncate text-sm font-medium text-[#1C1B1F] dark:text-[#E8E6E0]">
+
+            <span
+              className="
+                truncate
+                text-sm
+                font-medium
+                text-[#1C1B1F]
+                dark:text-[#E8E6E0]
+              "
+            >
               Whiteboard
             </span>
           </div>
@@ -139,11 +286,26 @@ export default function WhiteboardPage() {
           </Button>
         </div>
 
-        {/* Toolbar: horizontally scrollable on small screens */}
         <div className="w-full overflow-x-auto scrollbar-none">
-          <div className="flex w-max items-center gap-0.5 rounded-lg border border-[#D8D4CB] p-0.5 dark:border-[#3A3833]">
+          <div
+            className="
+              flex
+              w-max
+              items-center
+              gap-0.5
+              rounded-lg
+              border
+              border-[#D8D4CB]
+              p-0.5
+              dark:border-[#3A3833]
+            "
+          >
             <Button
-              variant={activeTool === 'select' ? 'default' : 'ghost'}
+              variant={
+                activeTool === 'select'
+                  ? 'default'
+                  : 'ghost'
+              }
               size="icon"
               onClick={() => setActiveTool('select')}
               aria-label="Select"
@@ -151,8 +313,13 @@ export default function WhiteboardPage() {
             >
               <MousePointer2 className="h-4 w-4" />
             </Button>
+
             <Button
-              variant={activeTool === 'pen' ? 'default' : 'ghost'}
+              variant={
+                activeTool === 'pen'
+                  ? 'default'
+                  : 'ghost'
+              }
               size="icon"
               onClick={() => setActiveTool('pen')}
               aria-label="Pen"
@@ -160,35 +327,61 @@ export default function WhiteboardPage() {
             >
               <Pen className="h-4 w-4" />
             </Button>
+
             <Button
-              variant={activeTool === 'highlighter' ? 'default' : 'ghost'}
+              variant={
+                activeTool === 'highlighter'
+                  ? 'default'
+                  : 'ghost'
+              }
               size="icon"
-              onClick={() => setActiveTool('highlighter')}
+              onClick={() =>
+                setActiveTool('highlighter')
+              }
               aria-label="Highlighter"
               className="shrink-0"
             >
               <Highlighter className="h-4 w-4" />
             </Button>
+
             <Button
-              variant={activeTool === 'rectangle' ? 'default' : 'ghost'}
+              variant={
+                activeTool === 'rectangle'
+                  ? 'default'
+                  : 'ghost'
+              }
               size="icon"
-              onClick={() => setActiveTool('rectangle')}
+              onClick={() =>
+                setActiveTool('rectangle')
+              }
               aria-label="Rectangle"
               className="shrink-0"
             >
               <Square className="h-4 w-4" />
             </Button>
+
             <Button
-              variant={activeTool === 'circle' ? 'default' : 'ghost'}
+              variant={
+                activeTool === 'circle'
+                  ? 'default'
+                  : 'ghost'
+              }
               size="icon"
-              onClick={() => setActiveTool('circle')}
+              onClick={() =>
+                setActiveTool('circle')
+              }
               aria-label="Circle"
               className="shrink-0"
             >
               <CircleIcon className="h-4 w-4" />
             </Button>
+
             <Button
-              variant={activeTool === 'line' ? 'default' : 'ghost'}
+              variant={
+                activeTool === 'line'
+                  ? 'default'
+                  : 'ghost'
+              }
               size="icon"
               onClick={() => setActiveTool('line')}
               aria-label="Line"
@@ -196,8 +389,13 @@ export default function WhiteboardPage() {
             >
               <Minus className="h-4 w-4" />
             </Button>
+
             <Button
-              variant={activeTool === 'arrow' ? 'default' : 'ghost'}
+              variant={
+                activeTool === 'arrow'
+                  ? 'default'
+                  : 'ghost'
+              }
               size="icon"
               onClick={() => setActiveTool('arrow')}
               aria-label="Arrow"
@@ -205,8 +403,13 @@ export default function WhiteboardPage() {
             >
               <ArrowUpRight className="h-4 w-4" />
             </Button>
+
             <Button
-              variant={activeTool === 'text' ? 'default' : 'ghost'}
+              variant={
+                activeTool === 'text'
+                  ? 'default'
+                  : 'ghost'
+              }
               size="icon"
               onClick={() => setActiveTool('text')}
               aria-label="Text"
@@ -214,16 +417,34 @@ export default function WhiteboardPage() {
             >
               <Type className="h-4 w-4" />
             </Button>
+
             <Button
-              variant={activeTool === 'sticky-note' ? 'default' : 'ghost'}
+              variant={
+                activeTool === 'sticky-note'
+                  ? 'default'
+                  : 'ghost'
+              }
               size="icon"
-              onClick={() => setActiveTool('sticky-note')}
+              onClick={() =>
+                setActiveTool('sticky-note')
+              }
               aria-label="Sticky note"
               className="shrink-0"
             >
               <StickyNote className="h-4 w-4" />
             </Button>
-            <div className="mx-1 h-5 w-px shrink-0 bg-[#D8D4CB] dark:bg-[#3A3833]" />
+
+            <div
+              className="
+                mx-1
+                h-5
+                w-px
+                shrink-0
+                bg-[#D8D4CB]
+                dark:bg-[#3A3833]
+              "
+            />
+
             <Button
               variant="ghost"
               size="icon"
@@ -233,6 +454,7 @@ export default function WhiteboardPage() {
             >
               <Undo2 className="h-4 w-4" />
             </Button>
+
             <Button
               variant="ghost"
               size="icon"
@@ -246,29 +468,78 @@ export default function WhiteboardPage() {
         </div>
       </header>
 
-      {/* Tool settings panel — wraps it with data attribute for measuring */}
+      {/* Settings */}
       <div data-tool-settings-panel>
         <ToolSettingsPanel />
       </div>
 
-      <main className="relative flex-1 overflow-hidden">
-        {size.width > 0 && size.height > 0 && (
-          <div
-            className="relative mx-auto bg-white shadow-inner dark:bg-white"
-            style={{ width: size.width, height: size.height }}
-          >
-            <DrawingCanvas
-              pageNumber={WHITEBOARD_PAGE}
-              width={size.width}
-              height={size.height}
-            />
-            <TextToolLayer
-              pageNumber={WHITEBOARD_PAGE}
-              width={size.width}
-              height={size.height}
-            />
-          </div>
-        )}
+      {/* Whiteboard */}
+      <main
+        className="relative flex-1 overflow-hidden"
+        style={{
+          touchAction: penActive
+            ? 'none'
+            : 'auto',
+        }}
+      >
+        {size.width > 0 &&
+          size.height > 0 && (
+            <div
+              className="
+                relative
+                mx-auto
+                overflow-hidden
+                bg-white
+                shadow-inner
+                dark:bg-white
+              "
+              style={{
+                width: size.width,
+                height: size.height,
+              }}
+            >
+              {/* ------------------------------------------------
+                  TEXT LAYER
+                  ------------------------------------------------ */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  zIndex: textActive ? 20 : 5,
+                  pointerEvents: textActive
+                    ? 'auto'
+                    : 'none',
+                }}
+              >
+                <TextToolLayer
+                  pageNumber={WHITEBOARD_PAGE}
+                  width={size.width}
+                  height={size.height}
+                />
+              </div>
+
+              {/* ------------------------------------------------
+                  DRAWING CANVAS
+                  ------------------------------------------------ */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  zIndex: 10,
+                  pointerEvents: penActive
+                    ? 'auto'
+                    : 'none',
+                  touchAction: penActive
+                    ? 'none'
+                    : 'auto',
+                }}
+              >
+                <DrawingCanvas
+                  pageNumber={WHITEBOARD_PAGE}
+                  width={size.width}
+                  height={size.height}
+                />
+              </div>
+            </div>
+          )}
       </main>
     </div>
   );

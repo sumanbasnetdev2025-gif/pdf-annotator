@@ -73,8 +73,7 @@ function SubtractionBoxesRow({
         Q{index + 1}
       </div>
 
-      <div className="overflow-x-auto">
-        <div
+<div className="overflow-x-auto py-2">        <div
           className="relative"
           style={{ width: GUTTER + gridWidth, height: totalHeight }}
         >

@@ -24,7 +24,6 @@ import type { Annotation } from '@/types';
 const MATH_PAGE = 9001;
 
 const PASS_THROUGH_TOOLS = ['select', 'text', 'sticky-note', 'hand'];
-
 /** Stable empty array — avoids re-renders in Zustand selectors. */
 const EMPTY_ANNOTATIONS: Annotation[] = [];
 
@@ -55,7 +54,7 @@ export function MathWhiteboardPage() {
 
   const activeTool = useToolStore((s) => s.activeTool);
   const penActive = !PASS_THROUGH_TOOLS.includes(activeTool);
-
+  const setActiveTool = useToolStore((s) => s.setActiveTool);
   function handleGenerate(next: WorksheetConfig) {
     const ws = buildWorksheet(next);
     setWorksheet(ws);
@@ -187,6 +186,10 @@ export function MathWhiteboardPage() {
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
+// Reset the active tool to a sane default every time this page mounts.
+useEffect(() => {
+  setActiveTool('select');
+}, [setActiveTool]);
 
   const renderer = useMemo(() => {
     if (!worksheet) return null;
@@ -289,8 +292,11 @@ export function MathWhiteboardPage() {
           />
         </aside>
 
-        <main className="relative min-h-0 min-w-0 flex-1 overflow-auto pb-24">
-          {!worksheet ? (
+<main
+  className="relative min-h-0 min-w-0 flex-1 overflow-auto pb-24"
+  style={{ touchAction: penActive ? 'none' : 'auto' }}
+>
+            {!worksheet ? (
             <div className="flex h-full items-center justify-center p-6 text-center text-sm text-[#6B6760] dark:text-[#A8A29A]">
               Choose a topic on the {''}
               <span className="mx-1 font-medium">left</span>
@@ -335,18 +341,21 @@ export function MathWhiteboardPage() {
                 )}
 
                 {canvasSize.width > 0 && canvasSize.height > 0 && (
-                  <div
-                    className="math-pen-overlay absolute inset-0"
-                    data-passthrough={penActive ? 'false' : 'true'}
-                    style={{ zIndex: 10 }}
-                  >
-                    <DrawingCanvas
-                      pageNumber={MATH_PAGE}
-                      width={canvasSize.width}
-                      height={canvasSize.height}
-                    />
-                  </div>
-                )}
+  <div
+    className="math-pen-overlay absolute inset-0"
+    data-passthrough={penActive ? 'false' : 'true'}
+    style={{
+      zIndex: 10,
+      touchAction: penActive ? 'none' : 'auto',   // ← forces Konva to receive touches
+    }}
+  >
+    <DrawingCanvas
+      pageNumber={MATH_PAGE}
+      width={canvasSize.width}
+      height={canvasSize.height}
+    />
+  </div>
+)}
               </div>
             </div>
           )}

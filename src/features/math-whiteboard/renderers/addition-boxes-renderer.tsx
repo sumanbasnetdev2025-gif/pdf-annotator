@@ -75,7 +75,7 @@ function AdditionBoxesRow({
         Q{index + 1}
       </div>
 
-      <div className="overflow-x-auto overflow-y-visible py-2">
+      <div className="overflow-x-auto py-2">
         <div
           className="relative"
           style={{
