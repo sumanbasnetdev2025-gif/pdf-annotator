@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { saveDocument, getAllDocuments, deleteDocument } from '@/lib/db';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { imageToPdf } from '@/lib/image-to-pdf';
 
 interface RecentDoc {
   id: string;
@@ -38,30 +37,32 @@ export default function HomePage() {
     loadRecent();
   }, []);
 
-  const handleFile = useCallback(
-    async (file: File) => {
-      const isPdf = file.type === 'application/pdf';
-      const isImage = ['image/jpeg', 'image/jpg', 'image/png'].includes(
-        file.type.toLowerCase()
-      );
-      if (!isPdf && !isImage) {
-        alert('Please select a PDF, JPG, or PNG file.');
-        return;
-      }
-      let fileData: ArrayBuffer;
-      let fileName = file.name;
-      if (isImage) {
-        fileData = await imageToPdf(file);
-        fileName = file.name.replace(/\.(jpg|jpeg|png)$/i, '.pdf');
-      } else {
-        fileData = await file.arrayBuffer();
-      }
-      const id = crypto.randomUUID();
-      await saveDocument({ id, fileName, totalPages: 0, fileData });
-      router.push(`/viewer/${id}`);
-    },
-    [router]
-  );
+const handleFile = useCallback(
+  async (file: File) => {
+    const isPdf = file.type === 'application/pdf';
+    const isImage = ['image/jpeg', 'image/jpg', 'image/png'].includes(
+      file.type.toLowerCase()
+    );
+    if (!isPdf && !isImage) {
+      alert('Please select a PDF, JPG, or PNG file.');
+      return;
+    }
+    let fileData: ArrayBuffer;
+    let fileName = file.name;
+    if (isImage) {
+      // Lazy-load pdf-lib only when an image is actually being converted
+      const { imageToPdf } = await import('@/lib/image-to-pdf');
+      fileData = await imageToPdf(file);
+      fileName = file.name.replace(/\.(jpg|jpeg|png)$/i, '.pdf');
+    } else {
+      fileData = await file.arrayBuffer();
+    }
+    const id = crypto.randomUUID();
+    await saveDocument({ id, fileName, totalPages: 0, fileData });
+    router.push(`/viewer/${id}`);
+  },
+  [router]
+);
 
   const onDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
@@ -108,11 +109,13 @@ export default function HomePage() {
       let fileData: ArrayBuffer = arrayBuffer;
       const rawName = urlInput.split('/').pop()?.split('?')[0] || 'document';
       let fileName = rawName;
-      if (isImage) {
-        const file = new File([arrayBuffer], rawName, { type: blob.type });
-        fileData = await imageToPdf(file);
-        fileName = rawName.replace(/\.(jpg|jpeg|png)$/i, '.pdf');
-      } else if (!isPdf) {
+if (isImage) {
+  const { imageToPdf } = await import('@/lib/image-to-pdf');
+  const file = new File([arrayBuffer], rawName, { type: blob.type });
+  fileData = await imageToPdf(file);
+  fileName = rawName.replace(/\.(jpg|jpeg|png)$/i, '.pdf');
+}
+      else if (!isPdf) {
         setUrlError('URL does not point to a PDF or image.');
         setUrlLoading(false);
         return;
