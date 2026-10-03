@@ -265,7 +265,7 @@ export default function WhiteboardPage() {
       <main
         ref={scrollRef}
         className="flex-1 overflow-auto bg-[#E8E6E0] dark:bg-[#1C1B1F]"
-        style={{ touchAction: penActive ? 'none' : 'auto' }}
+        style={{ overscrollBehavior: 'contain' }}
       >
         <div
           className="relative"

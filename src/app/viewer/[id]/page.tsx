@@ -417,13 +417,13 @@ const tools = [
                 }
               >
                 <div ref={pageWrapperRef} className="relative mx-auto rounded-md bg-white shadow-md">
-                  <Page
-                    pageNumber={currentPage}
-                    scale={zoomLevel}
-                    renderAnnotationLayer={false}
-                    renderTextLayer={false}
-                    onRenderSuccess={onPageRenderSuccess}
-                  />
+<Page
+  pageNumber={currentPage}
+  scale={zoomLevel}
+  renderAnnotationLayer
+  renderTextLayer
+  onRenderSuccess={onPageRenderSuccess}
+/>
 
                   {searchHighlights.length > 0 && nat.width > 0 && (
                     <div
