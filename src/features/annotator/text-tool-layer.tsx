@@ -262,46 +262,49 @@ export function TextToolLayer({
     [pageNumber, deleteAnnotation]
   );
 
-  const handleLayerPointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (activeTool !== 'text' && activeTool !== 'sticky-note') return;
-      if (e.target !== e.currentTarget) return;
+const handleLayerPointerDown = useCallback(
+  (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activeTool !== 'text' && activeTool !== 'sticky-note') return;
 
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const id = crypto.randomUUID();
+    // Ignore taps that landed on an existing note
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-note-root]')) return;
 
-      const newText: TextAnnotation = {
-        id,
-        pageNumber,
-        type: activeTool,
-        x,
-        y,
-        width: 200,
-        height: 80,
-        text: '',
-        fontSize,
-        fontFamily: 'Inter',
-        color: activeTool === 'sticky-note' ? '#1C1B1F' : color,
-        backgroundColor: activeTool === 'sticky-note' ? '#FFF3B0' : undefined,
-        bold: false,
-        italic: false,
-        underline: false,
-        align: 'left',
-        rotation: 0,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        locked: false,
-        opacity: 1,
-        zIndex: annotations.length,
-      };
-      addAnnotation(pageNumber, newText);
-      setEditingId(id);
-      setSelectedId(id);
-    },
-    [activeTool, color, fontSize, pageNumber, annotations.length, addAnnotation]
-  );
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const id = crypto.randomUUID();
+    const newText: TextAnnotation = {
+      id,
+      pageNumber,
+      type: activeTool,
+      x,
+      y,
+      width: 200,
+      height: 80,
+      text: '',
+      fontSize,
+      fontFamily: 'Inter',
+      color: activeTool === 'sticky-note' ? '#1C1B1F' : color,
+      backgroundColor: activeTool === 'sticky-note' ? '#FFF3B0' : undefined,
+      bold: false,
+      italic: false,
+      underline: false,
+      align: 'left',
+      rotation: 0,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      locked: false,
+      opacity: 1,
+      zIndex: annotations.length,
+    };
+    addAnnotation(pageNumber, newText);
+    setEditingId(id);
+    setSelectedId(id);
+  },
+  [activeTool, color, fontSize, pageNumber, annotations.length, addAnnotation]
+);
 
   const handleBlur = useCallback(
     (ann: TextAnnotation) => {

@@ -128,9 +128,9 @@ export default function WhiteboardPage() {
     function handleScroll() {
       if (!el) return;
       const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (distFromBottom < 400) {
-  setCanvasHeight((prev) => Math.min(prev + 1000, 6000));
-}
+      if (distFromBottom < 400) {
+        setCanvasHeight((prev) => Math.min(prev + 1000, 6000));
+      }
     }
     el.addEventListener('scroll', handleScroll);
     return () => el.removeEventListener('scroll', handleScroll);
@@ -172,7 +172,7 @@ export default function WhiteboardPage() {
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-[#E8E6E0] dark:bg-[#1C1B1F]">
-      {/* ── Header ── */}
+      {/* ── Header: back + title + clear ── */}
       <header className="sticky top-0 z-30 flex flex-col gap-2 border-b border-[#D8D4CB] bg-white px-2 py-2 sm:px-4 sm:py-2.5 dark:border-[#3A3833] dark:bg-[#26242A]">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
@@ -201,8 +201,8 @@ export default function WhiteboardPage() {
           </Button>
         </div>
 
+        {/* ── Tool row ── */}
         <div className="flex w-full items-center gap-2 overflow-x-auto scrollbar-none">
-          {/* Tools */}
           <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-[#D8D4CB] p-0.5 dark:border-[#3A3833]">
             {TOOLS.map(({ tool, Icon, label }) => (
               <Button
@@ -239,22 +239,23 @@ export default function WhiteboardPage() {
               <Redo2 className="h-4 w-4" />
             </Button>
           </div>
-
-          {/* Background picker */}
-          <div className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#D8D4CB] px-1.5 py-1 sm:px-2 dark:border-[#3A3833]">
-            <span className="shrink-0 font-mono text-[9px] uppercase tracking-wider text-[#A8A49B]">
-              BG
-            </span>
-            <BgPicker
-              current={whiteboardBg}
-              onChange={(bg, dot) => {
-                setWhiteboardBg(bg);
-                setDotColor(dot);
-              }}
-            />
-          </div>
         </div>
       </header>
+
+      {/* ── Background picker row — separate from header so it doesn't
+              crowd the tool icons on narrow screens ── */}
+      <div className="flex items-center gap-1.5 overflow-x-auto border-b border-[#D8D4CB] bg-white px-3 py-1.5 scrollbar-none dark:border-[#3A3833] dark:bg-[#26242A]">
+        <span className="shrink-0 font-mono text-[9px] uppercase tracking-wider text-[#A8A49B]">
+          BG
+        </span>
+        <BgPicker
+          current={whiteboardBg}
+          onChange={(bg, dot) => {
+            setWhiteboardBg(bg);
+            setDotColor(dot);
+          }}
+        />
+      </div>
 
       {/* ── Settings bar ── */}
       <div ref={settingsPanelRef} data-tool-settings-panel>

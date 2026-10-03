@@ -22,7 +22,15 @@ export function MathInputBox({
   const isSmall = variant === 'small';
 
   return (
-    <div style={{ position: 'relative', zIndex: 20, width, height }}>
+    <div
+      style={{
+        position: 'relative',
+        zIndex: 20,
+        width,
+        height,
+        pointerEvents: 'auto',
+      }}
+    >
       <input
         type="text"
         inputMode="numeric"
@@ -38,7 +46,6 @@ export function MathInputBox({
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
         onFocus={(e) => {
-          // Scroll the box into view when the keyboard opens on mobile.
           setTimeout(
             () =>
               e.target.scrollIntoView({

@@ -23,10 +23,7 @@ import type { Annotation } from '@/types';
 
 const MATH_PAGE = 9001;
 
-// Tools that should NOT capture pointer events on the drawing canvas.
 const PASS_THROUGH_TOOLS = ['select', 'text', 'sticky-note'] as const;
-
-/** Stable empty array — avoids re-renders in Zustand selectors. */
 const EMPTY_ANNOTATIONS: Annotation[] = [];
 
 const BG_THEMES = [
@@ -80,12 +77,10 @@ export function MathWhiteboardPage() {
   const setWorksheet = useMathWorksheetStore((s) => s.setWorksheet);
   const clearAnswers = useMathWorksheetStore((s) => s.clearAnswers);
 
-  // ── Annotation store ──
   const annotationsByPage = useAnnotationStore((s) => s.annotationsByPage);
   const addAnnotation = useAnnotationStore((s) => s.addAnnotation);
   const setAnnotationsForPage = useAnnotationStore((s) => s.setAnnotationsForPage);
 
-  // Stable array reference for the current page.
   const divisionAnnotations = useMemo(
     () => annotationsByPage[MATH_PAGE] ?? EMPTY_ANNOTATIONS,
     [annotationsByPage]
@@ -209,7 +204,6 @@ export function MathWhiteboardPage() {
     setAnnotationsForPage(MATH_PAGE, []);
   }
 
-  // ── Measure the canvas area ──
   useEffect(() => {
     function update() {
       const el = document.getElementById('math-canvas-area');
@@ -217,7 +211,6 @@ export function MathWhiteboardPage() {
       const r = el.getBoundingClientRect();
       setCanvasSize({
         width: Math.floor(r.width),
-        // use scrollHeight so layers cover ALL content, not just visible area
         height: Math.max(Math.floor(r.height), el.scrollHeight),
       });
     }
@@ -240,16 +233,17 @@ export function MathWhiteboardPage() {
     };
   }, [worksheet]);
 
-  // ── Track mobile breakpoint ──
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 1024);
+    const check = () => {
+      const mobile = window.innerWidth < 1024;
+      setIsMobile(mobile);
+      if (mobile) setShowForm(false);
+    };
     check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Reset the active tool to a sane default every time this page mounts.
-  // Remove this effect if you want the tool to persist across navigation.
   useEffect(() => {
     setActiveTool('pen');
   }, [setActiveTool]);
@@ -282,7 +276,6 @@ export function MathWhiteboardPage() {
     }
   }, [worksheet]);
 
-  // Extra height so stacked division solutions are never clipped.
   const divisionCanvasHeight = useMemo(() => {
     if (!worksheet || worksheet.config.topic !== 'division') return 0;
 
@@ -303,6 +296,7 @@ export function MathWhiteboardPage() {
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-[#E8E6E0] dark:bg-[#1C1B1F]">
+      {/* ── Header: back, title, eraser, settings ── */}
       <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-[#D8D4CB] bg-white px-2 py-2 sm:px-4 sm:py-2.5 dark:border-[#3A3833] dark:bg-[#26242A]">
         <div className="flex min-w-0 items-center gap-2">
           <Button
@@ -319,51 +313,53 @@ export function MathWhiteboardPage() {
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Background picker */}
-          <div className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#D8D4CB] px-1.5 py-1 sm:px-2 dark:border-[#3A3833]">
-            <span className="shrink-0 font-mono text-[9px] uppercase tracking-wider text-[#A8A49B]">
-              BG
-            </span>
-            <BgPicker
-              current={whiteboardBg}
-              onChange={(bg, dot) => {
-                setWhiteboardBg(bg);
-                setDotColor(dot);
-              }}
-            />
-          </div>
-
-          <div className="flex items-center gap-1">
-            {worksheet && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={clearAnswers}
-                aria-label="Clear typed answers"
-                className="shrink-0"
-              >
-                <Eraser className="h-4 w-4" />
-              </Button>
-            )}
+        <div className="flex shrink-0 items-center gap-1">
+          {worksheet && (
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setShowForm((s) => !s)}
-              aria-label="Toggle form"
+              onClick={clearAnswers}
+              aria-label="Clear typed answers"
               className="shrink-0"
             >
-              <Settings2 className="h-4 w-4" />
+              <Eraser className="h-4 w-4" />
             </Button>
-          </div>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowForm((s) => !s)}
+            aria-label="Toggle form"
+            className="shrink-0"
+          >
+            <Settings2 className="h-4 w-4" />
+          </Button>
         </div>
       </header>
+
+      {/* ── Background picker row: only shows when a worksheet is open
+              and the sidebar is closed. Kept separate from the header so
+              it doesn't crowd the icons on mobile. ── */}
+      {worksheet && !showForm && (
+        <div className="flex items-center gap-1.5 overflow-x-auto border-b border-[#D8D4CB] bg-white px-3 py-1.5 scrollbar-none dark:border-[#3A3833] dark:bg-[#26242A]">
+          <span className="shrink-0 font-mono text-[9px] uppercase tracking-wider text-[#A8A49B]">
+            BG
+          </span>
+          <BgPicker
+            current={whiteboardBg}
+            onChange={(bg, dot) => {
+              setWhiteboardBg(bg);
+              setDotColor(dot);
+            }}
+          />
+        </div>
+      )}
 
       <div className="relative flex flex-1 overflow-hidden">
         <aside
           className={[
-            'absolute inset-y-0 left-0 z-30 flex h-full w-full max-w-sm flex-col overflow-hidden border-r border-[#D8D4CB] bg-white transition-transform duration-200 dark:border-[#3A3833] dark:bg-[#26242A]',
-            'lg:static lg:z-auto lg:translate-x-0',
+            'absolute inset-y-0 left-0 z-30 flex h-full w-[85%] max-w-sm flex-col overflow-hidden border-r border-[#D8D4CB] bg-white transition-transform duration-200 dark:border-[#3A3833] dark:bg-[#26242A]',
+            'lg:static lg:w-full lg:z-auto lg:translate-x-0',
             showForm ? 'translate-x-0' : '-translate-x-full',
           ].join(' ')}
         >
@@ -404,7 +400,6 @@ export function MathWhiteboardPage() {
                     : {}),
                 }}
               >
-                {/* Dot grid overlay */}
                 <svg
                   className="pointer-events-none absolute inset-0"
                   width="100%"
@@ -428,11 +423,13 @@ export function MathWhiteboardPage() {
                   <rect width="100%" height="100%" fill="url(#math-grid)" />
                 </svg>
 
-                <div className="relative" style={{ zIndex: 2 }}>
-                  {renderer}
-                </div>
+               <div
+  className="relative"
+  style={{ zIndex: 2, pointerEvents: 'none' }}
+>
+  {renderer}
+</div>
 
-                {/* ── Text layer ── */}
                 {canvasSize.width > 0 && canvasSize.height > 0 && (
                   <div
                     className="absolute inset-0"
@@ -450,7 +447,6 @@ export function MathWhiteboardPage() {
                   </div>
                 )}
 
-                {/* ── Drawing canvas ── */}
                 {canvasSize.width > 0 && canvasSize.height > 0 && (
                   <div
                     className="absolute inset-0"
