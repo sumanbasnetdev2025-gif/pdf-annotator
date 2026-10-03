@@ -100,7 +100,7 @@ export default function WhiteboardPage() {
   const setAnnotationsForPage = useAnnotationStore((s) => s.setAnnotationsForPage);
 
   const [viewportWidth, setViewportWidth] = useState(0);
-  const [canvasHeight, setCanvasHeight] = useState(3000);
+  const [canvasHeight, setCanvasHeight] = useState(2000);
   const scrollRef = useRef<HTMLDivElement>(null);
   const settingsPanelRef = useRef<HTMLDivElement>(null);
 
@@ -128,9 +128,9 @@ export default function WhiteboardPage() {
     function handleScroll() {
       if (!el) return;
       const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distFromBottom < 600) {
-        setCanvasHeight((prev) => prev + 2000);
-      }
+    if (distFromBottom < 400) {
+  setCanvasHeight((prev) => Math.min(prev + 1000, 6000));
+}
     }
     el.addEventListener('scroll', handleScroll);
     return () => el.removeEventListener('scroll', handleScroll);
@@ -168,7 +168,7 @@ export default function WhiteboardPage() {
     }
   }
 
-  const canvasWidth = Math.max(4000, viewportWidth);
+  const canvasWidth = Math.max(1600, Math.floor(viewportWidth * 1.5));
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-[#E8E6E0] dark:bg-[#1C1B1F]">

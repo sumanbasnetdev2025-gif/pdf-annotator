@@ -25,7 +25,6 @@ import { AnnotationSidebar } from '@/features/annotator/annotation-sidebar';
 import { PdfSearchBar } from '@/features/annotator/pdf-search-bar';
 import { PresentationMode } from '@/features/presentation/presentation-mode';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { exportAnnotatedPdf } from '@/lib/export-pdf';
 import { useAutosave } from '@/hooks/use-autosave';
 import {FloatingViewer} from '@/features/pip/floating-viewer';
 import { usePip } from '@/hooks/use-pip';
@@ -224,23 +223,24 @@ usePinchZoom(mainScrollRef);
     []
   );
 
-  const handleExport = useCallback(async () => {
-    if (!fileData) return;
-    const annotationsByPage = useAnnotationStore.getState().annotationsByPage;
-    // Clone for pdf-lib — keeps original intact
-    const bytes = await exportAnnotatedPdf(
-      fileData.slice(0),
-      annotationsByPage,
-      pageHeights
-    );
-    const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName.replace('.pdf', '') + '_annotated.pdf';
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [fileData, fileName, pageHeights]);
+const handleExport = useCallback(async () => {
+  if (!fileData) return;
+  // Lazy-load pdf-lib only when the user actually exports.
+  const { exportAnnotatedPdf } = await import('@/lib/export-pdf');
+  const annotationsByPage = useAnnotationStore.getState().annotationsByPage;
+  const bytes = await exportAnnotatedPdf(
+    fileData.slice(0),
+    annotationsByPage,
+    pageHeights
+  );
+  const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName.replace('.pdf', '') + '_annotated.pdf';
+  a.click();
+  URL.revokeObjectURL(url);
+}, [fileData, fileName, pageHeights]);
 
   if (error) {
     return (
@@ -387,15 +387,10 @@ const tools = [
       )}
 
       <div className="flex flex-1 overflow-hidden">
-    <main
+<main
   ref={mainScrollRef}
   className="flex flex-1 overflow-auto px-2 py-4 sm:px-8 sm:py-8"
-  style={{
-    overscrollBehavior: 'contain',
-    touchAction: activeTool === 'hand' || activeTool === 'select'
-      ? 'auto'
-      : 'none',
-  }}
+  style={{ overscrollBehavior: 'contain' }}
 >
             {isLoading && (
               <div className="flex w-full items-center justify-center gap-2 text-[#6B6862]">

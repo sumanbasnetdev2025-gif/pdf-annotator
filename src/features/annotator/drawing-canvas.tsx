@@ -8,6 +8,8 @@ import { useToolStore } from '@/store/tool-store';
 import { StrokeAnnotation, ShapeAnnotation, Annotation } from '@/types';
 import { getToolCursor } from '@/lib/cursors';
 
+const EMPTY_ANN: Annotation[] = [];
+
 function distPointToSegment(
   p: { x: number; y: number },
   a: { x: number; y: number },
@@ -45,7 +47,7 @@ export function DrawingCanvas({
   const isDrawing = useRef(false);
   const startPoint = useRef({ x: 0, y: 0 });
 
-  // Live stroke — bypasses React. Points live in a ref, drawn directly to Konva.
+  // Live stroke — bypasses React entirely.
   const liveStrokeRef = useRef<Konva.Line>(null);
   const liveShapeRef = useRef<Konva.Rect | Konva.Circle | null>(null);
   const liveLineRef = useRef<Konva.Line | Konva.Arrow | null>(null);
@@ -55,7 +57,7 @@ export function DrawingCanvas({
   } | null>(null);
   const liveLineData = useRef<number[] | null>(null);
 
-  // Only used to know when to show/hide the live layer container
+  // Single boolean, flips twice per stroke. Not on the hot path.
   const [hasLive, setHasLive] = useState(false);
 
   const activeTool = useToolStore((s) => s.activeTool);
@@ -64,13 +66,16 @@ export function DrawingCanvas({
   const opacity = useToolStore((s) => s.opacity);
   const isFilled = useToolStore((s) => s.isFilled);
 
-  const annotationsByPage = useAnnotationStore((s) => s.annotationsByPage);
+  // ── Page-scoped selector — only fires when THIS page's array changes ──
+  const rawAnnotations = useAnnotationStore(
+    (s) => s.annotationsByPage[pageNumber] ?? EMPTY_ANN
+  );
   const annotations = useMemo(
     () =>
-      (annotationsByPage[pageNumber] || []).filter(
+      rawAnnotations.filter(
         (a) => a.type !== 'text' && a.type !== 'sticky-note'
       ),
-    [annotationsByPage, pageNumber]
+    [rawAnnotations]
   );
 
   const addAnnotation = useAnnotationStore((s) => s.addAnnotation);
@@ -91,9 +96,7 @@ export function DrawingCanvas({
   const canDraw =
     isStrokeTool || isBoxShapeTool || isLineShapeTool || isEraserTool;
 
-  // ── Transformer sync ──────────────────────────────────────────────────
-  // NOTE: dep array is only [selectedIds] — NOT annotations. We don't want
-  // to re-sync on every new stroke added during a session.
+  // ── Transformer sync ─────────────────────────────────────────────────
   useEffect(() => {
     if (!transformerRef.current) return;
     const nodes = selectedIds
@@ -103,7 +106,7 @@ export function DrawingCanvas({
     transformerRef.current.getLayer()?.batchDraw();
   }, [selectedIds]);
 
-  // ── Delete key ────────────────────────────────────────────────────────
+  // ── Delete key ───────────────────────────────────────────────────────
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (
@@ -124,7 +127,7 @@ export function DrawingCanvas({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedIds, deleteSelected]);
 
-  // ── Eraser ────────────────────────────────────────────────────────────
+  // ── Eraser ───────────────────────────────────────────────────────────
   const eraseAtPointer = useCallback(() => {
     const stage = stageRef.current;
     const pos = stage?.getPointerPosition();
@@ -172,7 +175,7 @@ export function DrawingCanvas({
     }
   }, [pageNumber, strokeWidth, deleteAnnotation]);
 
-  // ── Pointer down ──────────────────────────────────────────────────────
+  // ── Pointer down ─────────────────────────────────────────────────────
   const handleStageMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
       if (isSelectTool) {
@@ -195,7 +198,6 @@ export function DrawingCanvas({
       if (isStrokeTool) {
         pointsRef.current = [pos.x, pos.y];
         setHasLive(true);
-        // points() and batchDraw() happen in a rAF after the layer mounts
         requestAnimationFrame(() => {
           liveStrokeRef.current?.points(pointsRef.current);
           liveStrokeRef.current?.getLayer()?.batchDraw();
@@ -215,7 +217,7 @@ export function DrawingCanvas({
     ]
   );
 
-  // ── Pointer move ──────────────────────────────────────────────────────
+  // ── Pointer move — the hot path. No React state here. ────────────────
   const handlePointerMove = useCallback(() => {
     if (!isDrawing.current) return;
     if (isEraserTool) { eraseAtPointer(); return; }
@@ -226,7 +228,6 @@ export function DrawingCanvas({
 
     if (isStrokeTool) {
       pointsRef.current.push(pos.x, pos.y);
-      // Imperative update — no React state, no re-render
       const line = liveStrokeRef.current;
       if (line) {
         line.points(pointsRef.current);
@@ -267,7 +268,9 @@ export function DrawingCanvas({
     }
   }, [isEraserTool, isStrokeTool, isBoxShapeTool, isLineShapeTool, eraseAtPointer]);
 
-  // ── Pointer up ────────────────────────────────────────────────────────
+  // ── Pointer up ───────────────────────────────────────────────────────
+  // NOTE: `annotations.length` is read from the store inside the function
+  // so it is NOT in the dep array. This keeps the callback stable.
   const handlePointerUp = useCallback(() => {
     if (!isDrawing.current) return;
     isDrawing.current = false;
@@ -275,6 +278,9 @@ export function DrawingCanvas({
       setHasLive(false);
       return;
     }
+
+    const currentCount =
+      useAnnotationStore.getState().annotationsByPage[pageNumber]?.length ?? 0;
 
     if (isStrokeTool && pointsRef.current.length >= 4) {
       const newStroke: StrokeAnnotation = {
@@ -288,7 +294,7 @@ export function DrawingCanvas({
         createdAt: Date.now(),
         updatedAt: Date.now(),
         locked: false,
-        zIndex: annotations.length,
+        zIndex: currentCount,
       };
       addAnnotation(pageNumber, newStroke);
     } else if (
@@ -313,7 +319,7 @@ export function DrawingCanvas({
         createdAt: Date.now(),
         updatedAt: Date.now(),
         locked: false,
-        zIndex: annotations.length,
+        zIndex: currentCount,
       };
       addAnnotation(pageNumber, newShape);
     } else if (isLineShapeTool && liveLineData.current) {
@@ -339,7 +345,7 @@ export function DrawingCanvas({
           createdAt: Date.now(),
           updatedAt: Date.now(),
           locked: false,
-          zIndex: annotations.length,
+          zIndex: currentCount,
         };
         addAnnotation(pageNumber, newShape);
 
@@ -349,7 +355,6 @@ export function DrawingCanvas({
       }
     }
 
-    // Clear live data
     pointsRef.current = [];
     liveShapeData.current = null;
     liveLineData.current = null;
@@ -357,10 +362,10 @@ export function DrawingCanvas({
   }, [
     pageNumber, activeTool, color, strokeWidth, opacity, isFilled,
     isEraserTool, isStrokeTool, isBoxShapeTool, isLineShapeTool,
-    annotations.length, addAnnotation, onExplainerDrawn,
+    addAnnotation, onExplainerDrawn,
   ]);
 
-  // ── Shape interactions ────────────────────────────────────────────────
+  // ── Shape interactions ───────────────────────────────────────────────
   const handleShapeClick = useCallback(
     (id: string, e: Konva.KonvaEventObject<MouseEvent>) => {
       if (!isSelectTool) return;
@@ -423,7 +428,7 @@ export function DrawingCanvas({
       else delete shapeRefs.current[id];
     };
 
-  // ── Render committed annotations ──────────────────────────────────────
+  // ── Render committed annotations ─────────────────────────────────────
   const renderAnnotation = (ann: Annotation) => {
     const isSelected = selectedIds.includes(ann.id);
     const draggable = isSelectTool && !ann.locked;
@@ -563,8 +568,9 @@ export function DrawingCanvas({
         pointerEvents: isHandTool ? 'none' : 'auto',
       }}
     >
-      {/* Committed annotations */}
-      <Layer>
+      {/* Committed annotations — listening disabled during a live stroke
+          to skip the hit-canvas redraw on every frame. */}
+      <Layer listening={!hasLive}>
         {annotations.map(renderAnnotation)}
 
         {isSelectTool && (
