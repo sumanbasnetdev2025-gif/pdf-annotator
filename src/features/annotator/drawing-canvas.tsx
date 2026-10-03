@@ -45,11 +45,18 @@ export function DrawingCanvas({
   const isDrawing = useRef(false);
   const startPoint = useRef({ x: 0, y: 0 });
 
-  const [currentPoints, setCurrentPoints] = useState<number[]>([]);
-  const [currentShape, setCurrentShape] = useState<{
+  // Live stroke — bypasses React. Points live in a ref, drawn directly to Konva.
+  const liveStrokeRef = useRef<Konva.Line>(null);
+  const liveShapeRef = useRef<Konva.Rect | Konva.Circle | null>(null);
+  const liveLineRef = useRef<Konva.Line | Konva.Arrow | null>(null);
+  const pointsRef = useRef<number[]>([]);
+  const liveShapeData = useRef<{
     x: number; y: number; width: number; height: number;
   } | null>(null);
-  const [currentLine, setCurrentLine] = useState<number[] | null>(null);
+  const liveLineData = useRef<number[] | null>(null);
+
+  // Only used to know when to show/hide the live layer container
+  const [hasLive, setHasLive] = useState(false);
 
   const activeTool = useToolStore((s) => s.activeTool);
   const color = useToolStore((s) => s.color);
@@ -85,6 +92,8 @@ export function DrawingCanvas({
     isStrokeTool || isBoxShapeTool || isLineShapeTool || isEraserTool;
 
   // ── Transformer sync ──────────────────────────────────────────────────
+  // NOTE: dep array is only [selectedIds] — NOT annotations. We don't want
+  // to re-sync on every new stroke added during a session.
   useEffect(() => {
     if (!transformerRef.current) return;
     const nodes = selectedIds
@@ -92,7 +101,7 @@ export function DrawingCanvas({
       .filter((n): n is Konva.Node => Boolean(n));
     transformerRef.current.nodes(nodes);
     transformerRef.current.getLayer()?.batchDraw();
-  }, [selectedIds, annotations]);
+  }, [selectedIds]);
 
   // ── Delete key ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -128,11 +137,7 @@ export function DrawingCanvas({
     for (const ann of pageAnns) {
       if (ann.locked) continue;
 
-      // Stroke — check every segment
-      if (
-        'points' in ann &&
-        Array.isArray((ann as StrokeAnnotation).points)
-      ) {
+      if ('points' in ann && Array.isArray((ann as StrokeAnnotation).points)) {
         const pts = (ann as StrokeAnnotation).points;
         for (let i = 0; i < pts.length - 2; i += 2) {
           const dist = distPointToSegment(
@@ -147,7 +152,6 @@ export function DrawingCanvas({
         }
       }
 
-      // Shape — check bounding box
       if (
         'x' in ann &&
         'width' in ann &&
@@ -188,9 +192,21 @@ export function DrawingCanvas({
       isDrawing.current = true;
       startPoint.current = pos;
 
-      if (isStrokeTool) setCurrentPoints([pos.x, pos.y]);
-      else if (isBoxShapeTool) setCurrentShape({ x: pos.x, y: pos.y, width: 0, height: 0 });
-      else if (isLineShapeTool) setCurrentLine([pos.x, pos.y, pos.x, pos.y]);
+      if (isStrokeTool) {
+        pointsRef.current = [pos.x, pos.y];
+        setHasLive(true);
+        // points() and batchDraw() happen in a rAF after the layer mounts
+        requestAnimationFrame(() => {
+          liveStrokeRef.current?.points(pointsRef.current);
+          liveStrokeRef.current?.getLayer()?.batchDraw();
+        });
+      } else if (isBoxShapeTool) {
+        liveShapeData.current = { x: pos.x, y: pos.y, width: 0, height: 0 };
+        setHasLive(true);
+      } else if (isLineShapeTool) {
+        liveLineData.current = [pos.x, pos.y, pos.x, pos.y];
+        setHasLive(true);
+      }
     },
     [
       isSelectTool, isEraserTool, canDraw,
@@ -209,19 +225,45 @@ export function DrawingCanvas({
     if (!pos) return;
 
     if (isStrokeTool) {
-      setCurrentPoints((prev) => [...prev, pos.x, pos.y]);
+      pointsRef.current.push(pos.x, pos.y);
+      // Imperative update — no React state, no re-render
+      const line = liveStrokeRef.current;
+      if (line) {
+        line.points(pointsRef.current);
+        line.getLayer()?.batchDraw();
+      }
     } else if (isBoxShapeTool) {
-      setCurrentShape({
+      liveShapeData.current = {
         x: Math.min(startPoint.current.x, pos.x),
         y: Math.min(startPoint.current.y, pos.y),
         width: Math.abs(pos.x - startPoint.current.x),
         height: Math.abs(pos.y - startPoint.current.y),
-      });
+      };
+      const shape = liveShapeRef.current;
+      if (shape) {
+        const data = liveShapeData.current;
+        if (shape.className === 'Circle') {
+          (shape as Konva.Circle).x(data.x + data.width / 2);
+          (shape as Konva.Circle).y(data.y + data.height / 2);
+          (shape as Konva.Circle).radius(Math.max(data.width, data.height) / 2);
+        } else {
+          (shape as Konva.Rect).x(data.x);
+          (shape as Konva.Rect).y(data.y);
+          (shape as Konva.Rect).width(data.width);
+          (shape as Konva.Rect).height(data.height);
+        }
+        shape.getLayer()?.batchDraw();
+      }
     } else if (isLineShapeTool) {
-      setCurrentLine([
+      liveLineData.current = [
         startPoint.current.x, startPoint.current.y,
         pos.x, pos.y,
-      ]);
+      ];
+      const line = liveLineRef.current;
+      if (line) {
+        line.points(liveLineData.current);
+        line.getLayer()?.batchDraw();
+      }
     }
   }, [isEraserTool, isStrokeTool, isBoxShapeTool, isLineShapeTool, eraseAtPointer]);
 
@@ -229,14 +271,17 @@ export function DrawingCanvas({
   const handlePointerUp = useCallback(() => {
     if (!isDrawing.current) return;
     isDrawing.current = false;
-    if (isEraserTool) return;
+    if (isEraserTool) {
+      setHasLive(false);
+      return;
+    }
 
-    if (isStrokeTool && currentPoints.length >= 4) {
+    if (isStrokeTool && pointsRef.current.length >= 4) {
       const newStroke: StrokeAnnotation = {
         id: crypto.randomUUID(),
         pageNumber,
         type: activeTool as 'pen' | 'pencil' | 'highlighter',
-        points: currentPoints,
+        points: [...pointsRef.current],
         color,
         strokeWidth: activeTool === 'highlighter' ? strokeWidth * 4 : strokeWidth,
         opacity: activeTool === 'highlighter' ? 0.4 : opacity,
@@ -248,17 +293,18 @@ export function DrawingCanvas({
       addAnnotation(pageNumber, newStroke);
     } else if (
       isBoxShapeTool &&
-      currentShape &&
-      (currentShape.width > 2 || currentShape.height > 2)
+      liveShapeData.current &&
+      (liveShapeData.current.width > 2 || liveShapeData.current.height > 2)
     ) {
+      const s = liveShapeData.current;
       const newShape: ShapeAnnotation = {
         id: crypto.randomUUID(),
         pageNumber,
         type: activeTool as 'rectangle' | 'circle' | 'ellipse',
-        x: currentShape.x,
-        y: currentShape.y,
-        width: currentShape.width,
-        height: currentShape.height,
+        x: s.x,
+        y: s.y,
+        width: s.width,
+        height: s.height,
         color,
         strokeWidth,
         fill: isFilled ? color : undefined,
@@ -270,23 +316,22 @@ export function DrawingCanvas({
         zIndex: annotations.length,
       };
       addAnnotation(pageNumber, newShape);
-    } else if (isLineShapeTool && currentLine) {
-      const dx = currentLine[2] - currentLine[0];
-      const dy = currentLine[3] - currentLine[1];
+    } else if (isLineShapeTool && liveLineData.current) {
+      const ln = liveLineData.current;
+      const dx = ln[2] - ln[0];
+      const dy = ln[3] - ln[1];
       if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
         const shapeType =
-          activeTool === 'explainer'
-            ? 'arrow'
-            : (activeTool as 'line' | 'arrow');
+          activeTool === 'explainer' ? 'arrow' : (activeTool as 'line' | 'arrow');
         const newShape: ShapeAnnotation = {
           id: crypto.randomUUID(),
           pageNumber,
           type: shapeType,
-          x: Math.min(currentLine[0], currentLine[2]),
-          y: Math.min(currentLine[1], currentLine[3]),
+          x: Math.min(ln[0], ln[2]),
+          y: Math.min(ln[1], ln[3]),
           width: Math.abs(dx),
           height: Math.abs(dy),
-          points: currentLine,
+          points: ln,
           color,
           strokeWidth,
           rotation: 0,
@@ -299,20 +344,17 @@ export function DrawingCanvas({
         addAnnotation(pageNumber, newShape);
 
         if (activeTool === 'explainer' && onExplainerDrawn) {
-          onExplainerDrawn({
-            x: currentLine[2],
-            y: currentLine[3],
-            arrowId: newShape.id,
-          });
+          onExplainerDrawn({ x: ln[2], y: ln[3], arrowId: newShape.id });
         }
       }
     }
 
-    setCurrentPoints([]);
-    setCurrentShape(null);
-    setCurrentLine(null);
+    // Clear live data
+    pointsRef.current = [];
+    liveShapeData.current = null;
+    liveLineData.current = null;
+    setHasLive(false);
   }, [
-    currentPoints, currentShape, currentLine,
     pageNumber, activeTool, color, strokeWidth, opacity, isFilled,
     isEraserTool, isStrokeTool, isBoxShapeTool, isLineShapeTool,
     annotations.length, addAnnotation, onExplainerDrawn,
@@ -381,7 +423,7 @@ export function DrawingCanvas({
       else delete shapeRefs.current[id];
     };
 
-  // ── Render annotations ────────────────────────────────────────────────
+  // ── Render committed annotations ──────────────────────────────────────
   const renderAnnotation = (ann: Annotation) => {
     const isSelected = selectedIds.includes(ann.id);
     const draggable = isSelectTool && !ann.locked;
@@ -508,6 +550,7 @@ export function DrawingCanvas({
       onMouseDown={handleStageMouseDown}
       onMouseMove={handlePointerMove}
       onMouseUp={handlePointerUp}
+      onMouseLeave={handlePointerUp}
       onTouchStart={handleStageMouseDown}
       onTouchMove={handlePointerMove}
       onTouchEnd={handlePointerUp}
@@ -520,52 +563,9 @@ export function DrawingCanvas({
         pointerEvents: isHandTool ? 'none' : 'auto',
       }}
     >
+      {/* Committed annotations */}
       <Layer>
         {annotations.map(renderAnnotation)}
-
-        {currentPoints.length > 0 && (
-          <Line
-            points={currentPoints}
-            stroke={color}
-            strokeWidth={
-              activeTool === 'highlighter' ? strokeWidth * 4 : strokeWidth
-            }
-            opacity={activeTool === 'highlighter' ? 0.4 : opacity}
-            tension={0.4}
-            lineCap="round"
-            lineJoin="round"
-          />
-        )}
-
-        {currentShape && activeTool === 'rectangle' && (
-          <Rect
-            x={currentShape.x} y={currentShape.y}
-            width={currentShape.width} height={currentShape.height}
-            stroke={color} strokeWidth={strokeWidth} dash={[6, 4]}
-          />
-        )}
-        {currentShape && (activeTool === 'circle' || activeTool === 'ellipse') && (
-          <Circle
-            x={currentShape.x + currentShape.width / 2}
-            y={currentShape.y + currentShape.height / 2}
-            radius={Math.max(currentShape.width, currentShape.height) / 2}
-            stroke={color} strokeWidth={strokeWidth} dash={[6, 4]}
-          />
-        )}
-        {currentLine && activeTool === 'line' && (
-          <Line
-            points={currentLine}
-            stroke={color} strokeWidth={strokeWidth}
-            dash={[6, 4]} lineCap="round"
-          />
-        )}
-        {currentLine && (activeTool === 'arrow' || activeTool === 'explainer') && (
-          <Arrow
-            points={currentLine}
-            stroke={color} fill={color}
-            strokeWidth={strokeWidth} dash={[6, 4]}
-          />
-        )}
 
         {isSelectTool && (
           <Transformer
@@ -577,6 +577,104 @@ export function DrawingCanvas({
           />
         )}
       </Layer>
+
+      {/* Live layer — only redraws during an active stroke */}
+      <Layer listening={false}>
+        {isStrokeTool && (
+          <Line
+            ref={liveStrokeRef}
+            points={[]}
+            stroke={color}
+            strokeWidth={
+              activeTool === 'highlighter' ? strokeWidth * 4 : strokeWidth
+            }
+            opacity={activeTool === 'highlighter' ? 0.4 : opacity}
+            tension={0.4}
+            lineCap="round"
+            lineJoin="round"
+            visible={hasLive}
+          />
+        )}
+        {isBoxShapeTool && hasLive && (
+          <LiveBoxShape
+            ref={liveShapeRef}
+            tool={activeTool}
+            color={color}
+            strokeWidth={strokeWidth}
+          />
+        )}
+        {isLineShapeTool && hasLive && (
+          <LiveLineShape
+            ref={liveLineRef}
+            tool={activeTool}
+            color={color}
+            strokeWidth={strokeWidth}
+          />
+        )}
+      </Layer>
     </Stage>
   );
 }
+
+// Small wrappers so we can attach refs to the correct Konva node types.
+const LiveBoxShape = ({
+  ref,
+  tool,
+  color,
+  strokeWidth,
+}: {
+  ref: React.Ref<Konva.Rect | Konva.Circle>;
+  tool: string;
+  color: string;
+  strokeWidth: number;
+}) => {
+  if (tool === 'rectangle') {
+    return (
+      <Rect
+        ref={ref as React.Ref<Konva.Rect>}
+        x={0} y={0} width={0} height={0}
+        stroke={color} strokeWidth={strokeWidth} dash={[6, 4]}
+      />
+    );
+  }
+  return (
+    <Circle
+      ref={ref as React.Ref<Konva.Circle>}
+      x={0} y={0} radius={0}
+      stroke={color} strokeWidth={strokeWidth} dash={[6, 4]}
+    />
+  );
+};
+LiveBoxShape.displayName = 'LiveBoxShape';
+
+const LiveLineShape = ({
+  ref,
+  tool,
+  color,
+  strokeWidth,
+}: {
+  ref: React.Ref<Konva.Line | Konva.Arrow>;
+  tool: string;
+  color: string;
+  strokeWidth: number;
+}) => {
+  if (tool === 'arrow' || tool === 'explainer') {
+    return (
+      <Arrow
+        ref={ref as React.Ref<Konva.Arrow>}
+        points={[]}
+        stroke={color} fill={color}
+        strokeWidth={strokeWidth} dash={[6, 4]}
+      />
+    );
+  }
+  return (
+    <Line
+      ref={ref as React.Ref<Konva.Line>}
+      points={[]}
+      stroke={color} strokeWidth={strokeWidth}
+      dash={[6, 4]} lineCap="round"
+    />
+  );
+};
+LiveLineShape.displayName = 'LiveLineShape';

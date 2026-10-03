@@ -54,7 +54,7 @@ function BgPicker({
           title={t.label}
           aria-label={`Background: ${t.label}`}
           onClick={() => onChange(t.bg, t.dot)}
-          className="h-6 w-6 rounded-full border-2 transition-transform hover:scale-110"
+          className="h-5 w-5 shrink-0 rounded-full border-2 transition-transform hover:scale-110 sm:h-6 sm:w-6"
           style={{
             backgroundColor: t.bg,
             borderColor: current === t.bg ? '#C8732A' : 'rgba(0,0,0,0.15)',
@@ -321,7 +321,7 @@ export function MathWhiteboardPage() {
 
         <div className="flex items-center gap-2">
           {/* Background picker */}
-          <div className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-[#D8D4CB] px-2 py-1 sm:flex dark:border-[#3A3833]">
+          <div className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#D8D4CB] px-1.5 py-1 sm:px-2 dark:border-[#3A3833]">
             <span className="shrink-0 font-mono text-[9px] uppercase tracking-wider text-[#A8A49B]">
               BG
             </span>
@@ -375,7 +375,7 @@ export function MathWhiteboardPage() {
 
         <main
           className="relative min-h-0 min-w-0 flex-1 overflow-auto pb-24"
-          style={{ touchAction: penActive ? 'none' : 'auto' }}
+          style={{ overscrollBehavior: 'contain' }}
         >
           {!worksheet ? (
             <div className="flex h-full items-center justify-center p-6 text-center text-sm text-[#6B6760] dark:text-[#A8A29A]">
@@ -439,6 +439,7 @@ export function MathWhiteboardPage() {
                     style={{
                       zIndex: 11,
                       pointerEvents: textActive ? 'auto' : 'none',
+                      touchAction: textActive ? 'auto' : 'none',
                     }}
                   >
                     <TextToolLayer

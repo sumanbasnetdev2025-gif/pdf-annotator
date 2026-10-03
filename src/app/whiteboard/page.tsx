@@ -71,7 +71,7 @@ function BgPicker({
           title={t.label}
           aria-label={`Background: ${t.label}`}
           onClick={() => onChange(t.bg, t.dot)}
-          className="h-6 w-6 rounded-full border-2 transition-transform hover:scale-110"
+          className="h-5 w-5 shrink-0 rounded-full border-2 transition-transform hover:scale-110 sm:h-6 sm:w-6"
           style={{
             backgroundColor: t.bg,
             borderColor: current === t.bg ? '#C8732A' : 'rgba(0,0,0,0.15)',
@@ -241,7 +241,7 @@ export default function WhiteboardPage() {
           </div>
 
           {/* Background picker */}
-          <div className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#D8D4CB] px-2 py-1 dark:border-[#3A3833]">
+          <div className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#D8D4CB] px-1.5 py-1 sm:px-2 dark:border-[#3A3833]">
             <span className="shrink-0 font-mono text-[9px] uppercase tracking-wider text-[#A8A49B]">
               BG
             </span>
@@ -305,6 +305,7 @@ export default function WhiteboardPage() {
             style={{
               zIndex: textActive ? 20 : 5,
               pointerEvents: textActive ? 'auto' : 'none',
+              touchAction: textActive ? 'auto' : 'none',
             }}
           >
             {viewportWidth > 0 && (
