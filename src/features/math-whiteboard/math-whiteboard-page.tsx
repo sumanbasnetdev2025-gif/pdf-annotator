@@ -23,9 +23,49 @@ import type { Annotation } from '@/types';
 
 const MATH_PAGE = 9001;
 
-const PASS_THROUGH_TOOLS = ['select', 'text', 'sticky-note', 'hand'];
+// Tools that should NOT capture pointer events on the drawing canvas.
+const PASS_THROUGH_TOOLS = ['select', 'text', 'sticky-note'] as const;
+
 /** Stable empty array — avoids re-renders in Zustand selectors. */
 const EMPTY_ANNOTATIONS: Annotation[] = [];
+
+const BG_THEMES = [
+  { id: 'white', bg: '#ffffff', dot: '#d1d5db', label: 'White' },
+  { id: 'black', bg: '#0f0f0f', dot: '#374151', label: 'Black' },
+  { id: 'cream', bg: '#faf7f0', dot: '#d6cfc4', label: 'Cream' },
+  { id: 'navy',  bg: '#0f172a', dot: '#1e3a5f', label: 'Navy' },
+  { id: 'green', bg: '#052e16', dot: '#14532d', label: 'Chalkboard' },
+  { id: 'gray',  bg: '#f1f5f9', dot: '#cbd5e1', label: 'Gray' },
+];
+
+function BgPicker({
+  current,
+  onChange,
+}: {
+  current: string;
+  onChange: (bg: string, dot: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {BG_THEMES.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          title={t.label}
+          aria-label={`Background: ${t.label}`}
+          onClick={() => onChange(t.bg, t.dot)}
+          className="h-6 w-6 rounded-full border-2 transition-transform hover:scale-110"
+          style={{
+            backgroundColor: t.bg,
+            borderColor: current === t.bg ? '#C8732A' : 'rgba(0,0,0,0.15)',
+            transform: current === t.bg ? 'scale(1.2)' : 'scale(1)',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 export function MathWhiteboardPage() {
   const router = useRouter();
@@ -34,17 +74,16 @@ export function MathWhiteboardPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [showDivisionText, setShowDivisionText] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const [dotColor, setDotColor] = useState('#d1d5db');
 
   const worksheet = useMathWorksheetStore((s) => s.worksheet);
   const setWorksheet = useMathWorksheetStore((s) => s.setWorksheet);
   const clearAnswers = useMathWorksheetStore((s) => s.clearAnswers);
 
-  // ---- annotation store selectors ----
+  // ── Annotation store ──
   const annotationsByPage = useAnnotationStore((s) => s.annotationsByPage);
   const addAnnotation = useAnnotationStore((s) => s.addAnnotation);
-  const setAnnotationsForPage = useAnnotationStore(
-    (s) => s.setAnnotationsForPage
-  );
+  const setAnnotationsForPage = useAnnotationStore((s) => s.setAnnotationsForPage);
 
   // Stable array reference for the current page.
   const divisionAnnotations = useMemo(
@@ -53,8 +92,13 @@ export function MathWhiteboardPage() {
   );
 
   const activeTool = useToolStore((s) => s.activeTool);
-  const penActive = !PASS_THROUGH_TOOLS.includes(activeTool);
   const setActiveTool = useToolStore((s) => s.setActiveTool);
+  const whiteboardBg = useToolStore((s) => s.whiteboardBg);
+  const setWhiteboardBg = useToolStore((s) => s.setWhiteboardBg);
+
+  const penActive = !PASS_THROUGH_TOOLS.includes(activeTool as never);
+  const textActive = activeTool === 'text' || activeTool === 'sticky-note';
+
   function handleGenerate(next: WorksheetConfig) {
     const ws = buildWorksheet(next);
     setWorksheet(ws);
@@ -83,8 +127,14 @@ export function MathWhiteboardPage() {
     if (!isSmallScreen) {
       const divisionSolutions = existing
         .filter(
-          (a): a is Annotation & { x: number; y: number; width: number; height: number } =>
-            'x' in a && 'y' in a && 'width' in a && 'height' in a
+          (
+            a
+          ): a is Annotation & {
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+          } => 'x' in a && 'y' in a && 'width' in a && 'height' in a
         )
         .map((a) => ({ x: a.x, y: a.y, width: a.width, height: a.height }))
         .sort((a, b) => {
@@ -108,8 +158,13 @@ export function MathWhiteboardPage() {
       if (existing.length > 0) {
         const last = existing
           .filter(
-            (a): a is Annotation & { x: number; y: number; height: number } =>
-              'x' in a && 'y' in a && 'height' in a
+            (
+              a
+            ): a is Annotation & {
+              x: number;
+              y: number;
+              height: number;
+            } => 'x' in a && 'y' in a && 'height' in a
           )
           .sort((a, b) => b.y - a.y)[0];
 
@@ -154,7 +209,7 @@ export function MathWhiteboardPage() {
     setAnnotationsForPage(MATH_PAGE, []);
   }
 
-  // Measure canvas area
+  // ── Measure the canvas area ──
   useEffect(() => {
     function update() {
       const el = document.getElementById('math-canvas-area');
@@ -162,34 +217,42 @@ export function MathWhiteboardPage() {
       const r = el.getBoundingClientRect();
       setCanvasSize({
         width: Math.floor(r.width),
-        height: Math.floor(r.height),
+        // use scrollHeight so layers cover ALL content, not just visible area
+        height: Math.max(Math.floor(r.height), el.scrollHeight),
       });
     }
+
     update();
+    const t = window.setTimeout(update, 50);
+
     window.addEventListener('resize', update);
     window.addEventListener('orientationchange', update);
-    const t = setTimeout(update, 50);
+
     const ro = new ResizeObserver(update);
     const el = document.getElementById('math-canvas-area');
     if (el) ro.observe(el);
+
     return () => {
+      window.clearTimeout(t);
       window.removeEventListener('resize', update);
       window.removeEventListener('orientationchange', update);
-      clearTimeout(t);
       ro.disconnect();
     };
   }, [worksheet]);
 
+  // ── Track mobile breakpoint ──
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 1024);
     check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
-// Reset the active tool to a sane default every time this page mounts.
-useEffect(() => {
-  setActiveTool('select');
-}, [setActiveTool]);
+
+  // Reset the active tool to a sane default every time this page mounts.
+  // Remove this effect if you want the tool to persist across navigation.
+  useEffect(() => {
+    setActiveTool('pen');
+  }, [setActiveTool]);
 
   const renderer = useMemo(() => {
     if (!worksheet) return null;
@@ -233,8 +296,10 @@ useEffect(() => {
       return Math.max(max, y + h);
     }, 0);
 
-    return Math.max(canvasSize.height, maxBottom + 80);
+    return Math.max(canvasSize.height, maxBottom + 120);
   }, [worksheet, divisionAnnotations, canvasSize.height]);
+
+  const isDivision = worksheet?.config.topic === 'division';
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-[#E8E6E0] dark:bg-[#1C1B1F]">
@@ -254,27 +319,43 @@ useEffect(() => {
           </span>
         </div>
 
-        <div className="flex items-center gap-1">
-          {worksheet && (
+        <div className="flex items-center gap-2">
+          {/* Background picker */}
+          <div className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-[#D8D4CB] px-2 py-1 sm:flex dark:border-[#3A3833]">
+            <span className="shrink-0 font-mono text-[9px] uppercase tracking-wider text-[#A8A49B]">
+              BG
+            </span>
+            <BgPicker
+              current={whiteboardBg}
+              onChange={(bg, dot) => {
+                setWhiteboardBg(bg);
+                setDotColor(dot);
+              }}
+            />
+          </div>
+
+          <div className="flex items-center gap-1">
+            {worksheet && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={clearAnswers}
+                aria-label="Clear typed answers"
+                className="shrink-0"
+              >
+                <Eraser className="h-4 w-4" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
-              onClick={clearAnswers}
-              aria-label="Clear typed answers"
+              onClick={() => setShowForm((s) => !s)}
+              aria-label="Toggle form"
               className="shrink-0"
             >
-              <Eraser className="h-4 w-4" />
+              <Settings2 className="h-4 w-4" />
             </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowForm((s) => !s)}
-            aria-label="Toggle form"
-            className="shrink-0"
-          >
-            <Settings2 className="h-4 w-4" />
-          </Button>
+          </div>
         </div>
       </header>
 
@@ -292,13 +373,13 @@ useEffect(() => {
           />
         </aside>
 
-<main
-  className="relative min-h-0 min-w-0 flex-1 overflow-auto pb-24"
-  style={{ touchAction: penActive ? 'none' : 'auto' }}
->
-            {!worksheet ? (
+        <main
+          className="relative min-h-0 min-w-0 flex-1 overflow-auto pb-24"
+          style={{ touchAction: penActive ? 'none' : 'auto' }}
+        >
+          {!worksheet ? (
             <div className="flex h-full items-center justify-center p-6 text-center text-sm text-[#6B6760] dark:text-[#A8A29A]">
-              Choose a topic on the {''}
+              Choose a topic on the{' '}
               <span className="mx-1 font-medium">left</span>
               and tap{' '}
               <span className="mx-1 font-medium">Generate worksheet</span>.
@@ -309,60 +390,89 @@ useEffect(() => {
                 id="math-canvas-area"
                 className={[
                   'relative mx-auto w-full',
-                  worksheet.config.topic === 'division'
-                    ? 'rounded-xl bg-white shadow-inner dark:bg-[#1C1B1F]'
-                    : 'max-w-3xl',
+                  isDivision ? 'rounded-xl shadow-inner' : 'max-w-3xl',
                 ].join(' ')}
-                style={
-                  worksheet.config.topic === 'division'
+                style={{
+                  backgroundColor: whiteboardBg,
+                  transition: 'background-color 0.2s ease',
+                  ...(isDivision
                     ? {
                         minHeight: 'calc(100dvh - 12rem)',
-                        height: divisionCanvasHeight || 'calc(100dvh - 12rem)',
+                        height:
+                          divisionCanvasHeight || 'calc(100dvh - 12rem)',
                       }
-                    : undefined
-                }
+                    : {}),
+                }}
               >
-                {renderer}
+                {/* Dot grid overlay */}
+                <svg
+                  className="pointer-events-none absolute inset-0"
+                  width="100%"
+                  height="100%"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                  style={{ zIndex: 1 }}
+                >
+                  <defs>
+                    <pattern
+                      id="math-grid"
+                      x="0"
+                      y="0"
+                      width="24"
+                      height="24"
+                      patternUnits="userSpaceOnUse"
+                    >
+                      <circle cx="1" cy="1" r="0.8" fill={dotColor} />
+                    </pattern>
+                  </defs>
+                  <rect width="100%" height="100%" fill="url(#math-grid)" />
+                </svg>
 
+                <div className="relative" style={{ zIndex: 2 }}>
+                  {renderer}
+                </div>
+
+                {/* ── Text layer ── */}
                 {canvasSize.width > 0 && canvasSize.height > 0 && (
                   <div
                     className="absolute inset-0"
                     style={{
-                      zIndex: 9,
-                      pointerEvents: penActive ? 'none' : 'auto',
+                      zIndex: 11,
+                      pointerEvents: textActive ? 'auto' : 'none',
                     }}
                   >
                     <TextToolLayer
                       pageNumber={MATH_PAGE}
                       width={canvasSize.width}
-                      height={canvasSize.height}
+                      height={Math.max(canvasSize.height, 800)}
                     />
                   </div>
                 )}
 
+                {/* ── Drawing canvas ── */}
                 {canvasSize.width > 0 && canvasSize.height > 0 && (
-  <div
-    className="math-pen-overlay absolute inset-0"
-    data-passthrough={penActive ? 'false' : 'true'}
-    style={{
-      zIndex: 10,
-      touchAction: penActive ? 'none' : 'auto',   // ← forces Konva to receive touches
-    }}
-  >
-    <DrawingCanvas
-      pageNumber={MATH_PAGE}
-      width={canvasSize.width}
-      height={canvasSize.height}
-    />
-  </div>
-)}
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      zIndex: 10,
+                      pointerEvents: penActive ? 'auto' : 'none',
+                      touchAction: penActive ? 'none' : 'auto',
+                    }}
+                  >
+                    <DrawingCanvas
+                      pageNumber={MATH_PAGE}
+                      width={canvasSize.width}
+                      height={Math.max(canvasSize.height, 800)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           )}
         </main>
       </div>
 
-      {(!isMobile || !showForm) && (
+      {worksheet && (!isMobile || !showForm) && (
         <MathToolbar
           pageNumber={MATH_PAGE}
           onDivisionTextOpen={() => setShowDivisionText(true)}

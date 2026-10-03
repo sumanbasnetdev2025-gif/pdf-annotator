@@ -61,6 +61,14 @@ export function MathQuestionForm({ onGenerate, onTopicChange }: Props) {
     setQuestionCount(qFinal);
     setQuestionCountInput(String(qFinal));
 
+    // Bug 2 — validate manualNumbers before onGenerate.
+    const cleanedManuals = manualNumbers
+      .map((s) => s.trim())
+      .filter((s) => /^\d+(\s+\d+)+$/.test(s));
+
+    const finalManuals =
+      cleanedManuals.length > 0 ? cleanedManuals : manualNumbers;
+
     const config: WorksheetConfig = {
       topic,
       digits,
@@ -68,7 +76,8 @@ export function MathQuestionForm({ onGenerate, onTopicChange }: Props) {
       tableNumber: tFinal,
       questionCount: qFinal,
       mode,
-      manualNumbers,
+      // Bug 3 — only send manualNumbers for add/sub.
+      manualNumbers: isDigitTopic ? finalManuals : [],
     };
     onGenerate(config);
   }
@@ -147,19 +156,15 @@ export function MathQuestionForm({ onGenerate, onTopicChange }: Props) {
                 const n = Number(raw);
                 if (raw !== '' && n >= 1 && n <= 20) setTableNumber(n);
               }}
-onBlur={() => {
-  const raw = questionCountInput.trim();
-
-  if (raw === '') {
-    return;
-  }
-
-  const n = Number(raw);
-  const clamped = Math.min(20, Math.max(1, Math.floor(n)));
-
-  setQuestionCount(clamped);
-  setQuestionCountInput(String(clamped));
-}}
+              onBlur={() => {
+                // Bug 1 — was using questionCountInput by mistake.
+                const raw = tableNumberInput.trim();
+                if (raw === '') return;
+                const n = Number(raw);
+                const clamped = Math.min(20, Math.max(1, Math.floor(n)));
+                setTableNumber(clamped);
+                setTableNumberInput(String(clamped));
+              }}
               className="w-full rounded-lg border border-[#D8D4CB] bg-white px-3 py-2 text-sm outline-none focus:border-[#C8732A] dark:border-[#3A3833] dark:bg-[#26242A] dark:text-[#E8E6E0]"
             />
           </div>
@@ -223,19 +228,14 @@ onBlur={() => {
                 const n = Number(raw);
                 if (raw !== '' && n >= 1 && n <= 20) setQuestionCount(n);
               }}
-            onBlur={() => {
-  const raw = questionCountInput.trim();
-
-  if (raw === '') {
-    return;
-  }
-
-  const n = Number(raw);
-  const clamped = Math.min(20, Math.max(1, Math.floor(n)));
-
-  setQuestionCount(clamped);
-  setQuestionCountInput(String(clamped));
-}}
+              onBlur={() => {
+                const raw = questionCountInput.trim();
+                if (raw === '') return;
+                const n = Number(raw);
+                const clamped = Math.min(20, Math.max(1, Math.floor(n)));
+                setQuestionCount(clamped);
+                setQuestionCountInput(String(clamped));
+              }}
               className="w-full rounded-lg border border-[#D8D4CB] bg-white px-3 py-2 text-sm outline-none focus:border-[#C8732A] dark:border-[#3A3833] dark:bg-[#26242A] dark:text-[#E8E6E0]"
             />
           </div>

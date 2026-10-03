@@ -1,266 +1,152 @@
 import { create } from 'zustand';
-import { Annotation } from '@/types';
+import type { Annotation } from '@/types';
 
-interface HistoryEntry {
-  annotations: Annotation[];
-}
-
-interface AnnotationState {
-  // pageNumber -> annotations on that page
-  annotationsByPage: Record<number, Annotation[]>;
-  selectedIds: string[];
-
-  // History (undo/redo) - stores full snapshots, keyed by nothing (global across all pages)
-  history: HistoryEntry[];
-  historyIndex: number;
-
-  // Actions
-  addAnnotation: (pageNumber: number, annotation: Annotation) => void;
-  updateAnnotation: (pageNumber: number, id: string, updates: Partial<Annotation>) => void;
-  deleteAnnotation: (pageNumber: number, id: string) => void;
-  deleteSelected: () => void;
-  setAnnotationsForPage: (pageNumber: number, annotations: Annotation[]) => void;
-  getAnnotationsForPage: (pageNumber: number) => Annotation[];
-
-  selectAnnotation: (id: string, multi?: boolean) => void;
-  clearSelection: () => void;
-
-  duplicateSelected: (pageNumber: number) => void;
-  bringForward: (pageNumber: number, id: string) => void;
-  sendBackward: (pageNumber: number, id: string) => void;
-  toggleLock: (pageNumber: number, id: string) => void;
-
-  pushHistory: () => void;
-  undo: () => void;
-  redo: () => void;
-  canUndo: () => boolean;
-  canRedo: () => boolean;
-
-  loadAllAnnotations: (data: Record<number, Annotation[]>) => void;
-  reset: () => void;
-}
+type PageMap = Record<number, Annotation[]>;
 
 const MAX_HISTORY = 50;
 
-function flattenAll(annotationsByPage: Record<number, Annotation[]>): Annotation[] {
-  return Object.values(annotationsByPage).flat();
-}
+interface AnnotationState {
+  annotationsByPage: PageMap;
+  selectedIds: string[];
+  past: PageMap[];
+  future: PageMap[];
 
-function rebuildByPage(annotations: Annotation[]): Record<number, Annotation[]> {
-  const result: Record<number, Annotation[]> = {};
-  for (const ann of annotations) {
-    if (!result[ann.pageNumber]) result[ann.pageNumber] = [];
-    result[ann.pageNumber].push(ann);
-  }
-  return result;
+  // CRUD — signature matches what drawing-canvas and text-tool-layer call
+  addAnnotation: (pageNumber: number, annotation: Annotation) => void;
+  updateAnnotation: (pageNumber: number, id: string, updates: Partial<Annotation>) => void;
+  deleteAnnotation: (pageNumber: number, id: string) => void;
+  setAnnotationsForPage: (pageNumber: number, annotations: Annotation[]) => void;
+
+  // Selection
+  selectedId: string | null;
+  selectAnnotation: (id: string, addToSelection?: boolean) => void;
+  clearSelection: () => void;
+  deleteSelected: () => void;
+
+  // History
+  pushHistory: () => void;
+  undo: () => void;
+  redo: () => void;
+
+  // Helpers
+  getAnnotationsForPage: (pageNumber: number) => Annotation[];
+  clearAll: () => void;
 }
 
 export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   annotationsByPage: {},
   selectedIds: [],
-  history: [{ annotations: [] }],
-  historyIndex: 0,
+  selectedId: null,
+  past: [],
+  future: [],
 
-  addAnnotation: (pageNumber, annotation) => {
-    set((state) => {
-      const pageAnns = state.annotationsByPage[pageNumber] || [];
-      return {
-        annotationsByPage: {
-          ...state.annotationsByPage,
-          [pageNumber]: [...pageAnns, annotation],
-        },
-      };
-    });
-    get().pushHistory();
-  },
-
-  updateAnnotation: (pageNumber, id, updates) => {
-    set((state) => {
-      const pageAnns = state.annotationsByPage[pageNumber] || [];
-      return {
-        annotationsByPage: {
-          ...state.annotationsByPage,
-          [pageNumber]: pageAnns.map((a) =>
-            a.id === id ? ({ ...a, ...updates, updatedAt: Date.now() } as Annotation) : a
-          ),
-        },
-      };
-    });
-  },
-
-  deleteAnnotation: (pageNumber, id) => {
-    set((state) => {
-      const pageAnns = state.annotationsByPage[pageNumber] || [];
-      return {
-        annotationsByPage: {
-          ...state.annotationsByPage,
-          [pageNumber]: pageAnns.filter((a) => a.id !== id),
-        },
-        selectedIds: state.selectedIds.filter((sid) => sid !== id),
-      };
-    });
-    get().pushHistory();
-  },
-
-  deleteSelected: () => {
-    const { selectedIds, annotationsByPage } = get();
-    if (selectedIds.length === 0) return;
-    const updated: Record<number, Annotation[]> = {};
-    for (const [page, anns] of Object.entries(annotationsByPage)) {
-      updated[Number(page)] = anns.filter((a) => !selectedIds.includes(a.id));
-    }
-    set({ annotationsByPage: updated, selectedIds: [] });
-    get().pushHistory();
-  },
-
-  setAnnotationsForPage: (pageNumber, annotations) => {
-    set((state) => ({
-      annotationsByPage: {
-        ...state.annotationsByPage,
-        [pageNumber]: annotations,
-      },
-    }));
-  },
-
-  getAnnotationsForPage: (pageNumber) => {
-    return get().annotationsByPage[pageNumber] || [];
-  },
-
-  selectAnnotation: (id, multi = false) => {
-    set((state) => {
-      if (multi) {
-        const exists = state.selectedIds.includes(id);
-        return {
-          selectedIds: exists
-            ? state.selectedIds.filter((sid) => sid !== id)
-            : [...state.selectedIds, id],
-        };
-      }
-      return { selectedIds: [id] };
-    });
-  },
-
-  clearSelection: () => set({ selectedIds: [] }),
-
-  duplicateSelected: (pageNumber) => {
-    const { selectedIds, annotationsByPage } = get();
-    const pageAnns = annotationsByPage[pageNumber] || [];
-    const toDuplicate = pageAnns.filter((a) => selectedIds.includes(a.id));
-    if (toDuplicate.length === 0) return;
-
-    const duplicates = toDuplicate.map((a) => {
-      const offset = 'x' in a ? { x: a.x + 20, y: a.y + 20 } : {};
-      return {
-        ...a,
-        ...offset,
-        id: crypto.randomUUID(),
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      } as Annotation;
-    });
-
-    set((state) => ({
-      annotationsByPage: {
-        ...state.annotationsByPage,
-        [pageNumber]: [...pageAnns, ...duplicates],
-      },
-      selectedIds: duplicates.map((d) => d.id),
-    }));
-    get().pushHistory();
-  },
-
-  bringForward: (pageNumber, id) => {
-    set((state) => {
-      const pageAnns = [...(state.annotationsByPage[pageNumber] || [])];
-      const idx = pageAnns.findIndex((a) => a.id === id);
-      if (idx === -1 || idx === pageAnns.length - 1) return state;
-      [pageAnns[idx], pageAnns[idx + 1]] = [pageAnns[idx + 1], pageAnns[idx]];
-      return {
-        annotationsByPage: { ...state.annotationsByPage, [pageNumber]: pageAnns },
-      };
-    });
-    get().pushHistory();
-  },
-
-  sendBackward: (pageNumber, id) => {
-    set((state) => {
-      const pageAnns = [...(state.annotationsByPage[pageNumber] || [])];
-      const idx = pageAnns.findIndex((a) => a.id === id);
-      if (idx <= 0) return state;
-      [pageAnns[idx], pageAnns[idx - 1]] = [pageAnns[idx - 1], pageAnns[idx]];
-      return {
-        annotationsByPage: { ...state.annotationsByPage, [pageNumber]: pageAnns },
-      };
-    });
-    get().pushHistory();
-  },
-
-  toggleLock: (pageNumber, id) => {
-    set((state) => {
-      const pageAnns = state.annotationsByPage[pageNumber] || [];
-      return {
-        annotationsByPage: {
-          ...state.annotationsByPage,
-          [pageNumber]: pageAnns.map((a) =>
-            a.id === id ? { ...a, locked: !a.locked } : a
-          ),
-        },
-      };
-    });
-  },
-
+  // ── History ──────────────────────────────────────────────────────────
   pushHistory: () => {
-    const { history, historyIndex, annotationsByPage } = get();
-    const snapshot = flattenAll(annotationsByPage);
-    const truncated = history.slice(0, historyIndex + 1);
-    const newHistory = [...truncated, { annotations: snapshot }].slice(-MAX_HISTORY);
+    const current = get().annotationsByPage;
     set({
-      history: newHistory,
-      historyIndex: newHistory.length - 1,
+      past: [...get().past.slice(-MAX_HISTORY), current],
+      future: [],
     });
   },
 
   undo: () => {
-    const { history, historyIndex } = get();
-    if (historyIndex <= 0) return;
-    const newIndex = historyIndex - 1;
-    const snapshot = history[newIndex];
+    const { past, annotationsByPage } = get();
+    if (past.length === 0) return;
     set({
-      annotationsByPage: rebuildByPage(snapshot.annotations),
-      historyIndex: newIndex,
+      annotationsByPage: past[past.length - 1],
+      past: past.slice(0, -1),
+      future: [annotationsByPage, ...get().future],
       selectedIds: [],
+      selectedId: null,
     });
   },
 
   redo: () => {
-    const { history, historyIndex } = get();
-    if (historyIndex >= history.length - 1) return;
-    const newIndex = historyIndex + 1;
-    const snapshot = history[newIndex];
+    const { future, annotationsByPage } = get();
+    if (future.length === 0) return;
     set({
-      annotationsByPage: rebuildByPage(snapshot.annotations),
-      historyIndex: newIndex,
+      annotationsByPage: future[0],
+      past: [...get().past, annotationsByPage],
+      future: future.slice(1),
       selectedIds: [],
+      selectedId: null,
     });
   },
 
-  canUndo: () => get().historyIndex > 0,
-  canRedo: () => get().historyIndex < get().history.length - 1,
-
-  loadAllAnnotations: (data) => {
+  // ── CRUD ─────────────────────────────────────────────────────────────
+  addAnnotation: (pageNumber, annotation) => {
+    get().pushHistory();
+    const current = get().annotationsByPage[pageNumber] ?? [];
     set({
-      annotationsByPage: data,
-      history: [{ annotations: flattenAll(data) }],
-      historyIndex: 0,
-      selectedIds: [],
+      annotationsByPage: {
+        ...get().annotationsByPage,
+        [pageNumber]: [...current, annotation],
+      },
     });
   },
 
-  reset: () =>
+  updateAnnotation: (pageNumber, id, updates) => {
+    const current = get().annotationsByPage[pageNumber] ?? [];
     set({
-      annotationsByPage: {},
-      selectedIds: [],
-      history: [{ annotations: [] }],
-      historyIndex: 0,
-    }),
+      annotationsByPage: {
+        ...get().annotationsByPage,
+        [pageNumber]: current.map((a) =>
+          a.id === id ? ({ ...a, ...updates, updatedAt: Date.now() } as Annotation) : a
+        ),
+      },
+    });
+  },
+
+  deleteAnnotation: (pageNumber, id) => {
+    get().pushHistory();
+    const current = get().annotationsByPage[pageNumber] ?? [];
+    set({
+      annotationsByPage: {
+        ...get().annotationsByPage,
+        [pageNumber]: current.filter((a) => a.id !== id),
+      },
+      selectedIds: get().selectedIds.filter((s) => s !== id),
+      selectedId: get().selectedId === id ? null : get().selectedId,
+    });
+  },
+
+  setAnnotationsForPage: (pageNumber, annotations) => {
+    get().pushHistory();
+    set({
+      annotationsByPage: {
+        ...get().annotationsByPage,
+        [pageNumber]: annotations,
+      },
+    });
+  },
+
+  // ── Selection ─────────────────────────────────────────────────────────
+  selectAnnotation: (id, addToSelection = false) => {
+    set({
+      selectedIds: addToSelection
+        ? [...get().selectedIds.filter((s) => s !== id), id]
+        : [id],
+      selectedId: id,
+    });
+  },
+
+  clearSelection: () => set({ selectedIds: [], selectedId: null }),
+
+  deleteSelected: () => {
+    const { selectedIds, annotationsByPage } = get();
+    if (selectedIds.length === 0) return;
+    get().pushHistory();
+    const next: PageMap = {};
+    for (const [page, anns] of Object.entries(annotationsByPage)) {
+      next[Number(page)] = anns.filter((a) => !selectedIds.includes(a.id));
+    }
+    set({ annotationsByPage: next, selectedIds: [], selectedId: null });
+  },
+
+  // ── Helpers ───────────────────────────────────────────────────────────
+  getAnnotationsForPage: (pageNumber) =>
+    get().annotationsByPage[pageNumber] ?? [],
+
+  clearAll: () =>
+    set({ annotationsByPage: {}, selectedIds: [], selectedId: null, past: [], future: [] }),
 }));

@@ -51,7 +51,7 @@ function AdditionPlainRow({
     .sort((x, y) => x.col - y.col);
 
   // Right-align operands to the answer width.
-  const operandOffset = (answerColumns - aStr.length) * (CELL + GAP);
+  const operandOffset = (answerColumns - meta.columnCount) * (CELL + GAP);
 
   return (
     <div className="rounded-2xl border border-[#D8D4CB] bg-white p-3 sm:p-4 dark:border-[#3A3833] dark:bg-[#26242A]">
@@ -78,7 +78,7 @@ function AdditionPlainRow({
             >
               +
             </div>
-            <div style={{ width: operandOffset }} />
+            <div style={{ width: (answerColumns - bStr.length) * (CELL + GAP) }} />
             {bStr.split('').map((ch, c) => (
               <DigitCell key={`b-${c}`} char={ch} />
             ))}

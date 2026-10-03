@@ -1,73 +1,108 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { ToolType } from '@/types';
+import type { ToolType } from '@/types';
 
 interface ToolState {
   activeTool: ToolType;
-  color: string;
-  recentColors: string[];
-  strokeWidth: number;
-  opacity: number;
-  isDashed: boolean;
-  isFilled: boolean;
-  fontSize: number;
-  fontFamily: string;
-
   setActiveTool: (tool: ToolType) => void;
+
+  color: string;
   setColor: (color: string) => void;
+
+  recentColors: string[];
   addRecentColor: (color: string) => void;
-  setStrokeWidth: (width: number) => void;
-  setOpacity: (opacity: number) => void;
-  toggleDashed: () => void;
-  toggleFilled: () => void;
+
+  fontSize: number;
   setFontSize: (size: number) => void;
-  setFontFamily: (font: string) => void;
+
+  strokeWidth: number;
+  setStrokeWidth: (width: number) => void;
+
+  opacity: number;
+  setOpacity: (opacity: number) => void;
+
+  isFilled: boolean;
+  setIsFilled: (filled: boolean) => void;
+  toggleFilled: () => void;
+
+  // Whiteboard background color
+  whiteboardBg: string;
+  setWhiteboardBg: (bg: string) => void;
+
+  // Settings mirror — used by any component that reads settings object
+  settings: {
+    color: string;
+    recentColors: string[];
+    opacity: number;
+    strokeWidth: number;
+    filled: boolean;
+    fontSize: number;
+  };
 }
 
-const MAX_RECENT_COLORS = 8;
+const DEFAULT_COLORS = [
+  '#1C1B1F',
+  '#C8732A',
+  '#D62828',
+  '#2A7DE1',
+  '#2F9E44',
+  '#F4C430',
+];
 
-export const useToolStore = create<ToolState>()(
-  persist(
-    (set, get) => ({
-      activeTool: 'select',
-      color: '#FF3B30',
-      recentColors: ['#FF3B30', '#34C759', '#007AFF', '#FFCC00', '#000000'],
-      strokeWidth: 3,
-      opacity: 1,
-      isDashed: false,
-      isFilled: false,
-      fontSize: 16,
-      fontFamily: 'Inter',
+export const useToolStore = create<ToolState>((set, get) => ({
+  activeTool: 'pen',
 
-      setActiveTool: (tool) => set({ activeTool: tool }),
-      setColor: (color) => set({ color }),
-      addRecentColor: (color) => {
-        const { recentColors } = get();
-        const filtered = recentColors.filter((c) => c !== color);
-        const updated = [color, ...filtered].slice(0, MAX_RECENT_COLORS);
-        set({ recentColors: updated });
-      },
-      setStrokeWidth: (width) => set({ strokeWidth: width }),
-      setOpacity: (opacity) => set({ opacity }),
-      toggleDashed: () => set((state) => ({ isDashed: !state.isDashed })),
-      toggleFilled: () => set((state) => ({ isFilled: !state.isFilled })),
-      setFontSize: (size) => set({ fontSize: size }),
-      setFontFamily: (font) => set({ fontFamily: font }),
-    }),
-    {
-      name: 'pdf-annotator-tool-settings',
-      // Persist settings (colors, sizes) but NOT the active tool,
-      // because each page has its own preferred default.
-      partialize: (state) => ({
-        color: state.color,
-        recentColors: state.recentColors,
-        strokeWidth: state.strokeWidth,
-        opacity: state.opacity,
-        isDashed: state.isDashed,
-        isFilled: state.isFilled,
-        fontSize: state.fontSize,
-        fontFamily: state.fontFamily,
-      }),
-    }
-  )
-);
+  color: '#1C1B1F',
+  recentColors: [],
+  fontSize: 20,
+  strokeWidth: 3,
+  opacity: 1,
+  isFilled: false,
+
+  whiteboardBg: '#ffffff',
+
+  settings: {
+    color: '#1C1B1F',
+    recentColors: [],
+    opacity: 1,
+    strokeWidth: 3,
+    filled: false,
+    fontSize: 20,
+  },
+
+  setActiveTool: (activeTool) => set({ activeTool }),
+
+  setColor: (color) => {
+    set({
+      color,
+      settings: { ...get().settings, color },
+    });
+  },
+
+  addRecentColor: (color) => {
+    const filtered = get().recentColors.filter((c) => c !== color);
+    const recentColors = [color, ...filtered].slice(0, 8);
+    set({
+      recentColors,
+      settings: { ...get().settings, recentColors },
+    });
+  },
+
+  setFontSize: (fontSize) =>
+    set({ fontSize, settings: { ...get().settings, fontSize } }),
+
+  setStrokeWidth: (strokeWidth) =>
+    set({ strokeWidth, settings: { ...get().settings, strokeWidth } }),
+
+  setOpacity: (opacity) =>
+    set({ opacity, settings: { ...get().settings, opacity } }),
+
+  setIsFilled: (isFilled) =>
+    set({ isFilled, settings: { ...get().settings, filled: isFilled } }),
+
+  toggleFilled: () => {
+    const isFilled = !get().isFilled;
+    set({ isFilled, settings: { ...get().settings, filled: isFilled } });
+  },
+
+  setWhiteboardBg: (whiteboardBg) => set({ whiteboardBg }),
+}));

@@ -7,6 +7,7 @@ import { useAnnotationStore } from '@/store/annotation-store';
 import { useToolStore } from '@/store/tool-store';
 import { StrokeAnnotation, ShapeAnnotation, Annotation } from '@/types';
 import { getToolCursor } from '@/lib/cursors';
+
 function distPointToSegment(
   p: { x: number; y: number },
   a: { x: number; y: number },
@@ -15,21 +16,10 @@ function distPointToSegment(
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const lenSq = dx * dx + dy * dy;
-
-  if (lenSq === 0) {
-    return Math.hypot(p.x - a.x, p.y - a.y);
-  }
-
-  let t =
-    ((p.x - a.x) * dx + (p.y - a.y) * dy) /
-    lenSq;
-
+  if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq;
   t = Math.max(0, Math.min(1, t));
-
-  return Math.hypot(
-    p.x - (a.x + t * dx),
-    p.y - (a.y + t * dy)
-  );
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 }
 
 interface DrawingCanvasProps {
@@ -43,7 +33,12 @@ const STROKE_TOOLS = ['pen', 'pencil', 'highlighter'];
 const BOX_SHAPE_TOOLS = ['rectangle', 'circle', 'ellipse'];
 const LINE_SHAPE_TOOLS = ['line', 'arrow', 'explainer'];
 
-export function DrawingCanvas({ pageNumber, width, height, onExplainerDrawn }: DrawingCanvasProps) {
+export function DrawingCanvas({
+  pageNumber,
+  width,
+  height,
+  onExplainerDrawn,
+}: DrawingCanvasProps) {
   const stageRef = useRef<Konva.Stage>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
   const shapeRefs = useRef<Record<string, Konva.Node>>({});
@@ -51,7 +46,9 @@ export function DrawingCanvas({ pageNumber, width, height, onExplainerDrawn }: D
   const startPoint = useRef({ x: 0, y: 0 });
 
   const [currentPoints, setCurrentPoints] = useState<number[]>([]);
-  const [currentShape, setCurrentShape] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [currentShape, setCurrentShape] = useState<{
+    x: number; y: number; width: number; height: number;
+  } | null>(null);
   const [currentLine, setCurrentLine] = useState<number[] | null>(null);
 
   const activeTool = useToolStore((s) => s.activeTool);
@@ -62,9 +59,13 @@ export function DrawingCanvas({ pageNumber, width, height, onExplainerDrawn }: D
 
   const annotationsByPage = useAnnotationStore((s) => s.annotationsByPage);
   const annotations = useMemo(
-    () => (annotationsByPage[pageNumber] || []).filter((a) => a.type !== 'text' && a.type !== 'sticky-note'),
+    () =>
+      (annotationsByPage[pageNumber] || []).filter(
+        (a) => a.type !== 'text' && a.type !== 'sticky-note'
+      ),
     [annotationsByPage, pageNumber]
   );
+
   const addAnnotation = useAnnotationStore((s) => s.addAnnotation);
   const updateAnnotation = useAnnotationStore((s) => s.updateAnnotation);
   const deleteAnnotation = useAnnotationStore((s) => s.deleteAnnotation);
@@ -80,8 +81,10 @@ export function DrawingCanvas({ pageNumber, width, height, onExplainerDrawn }: D
   const isSelectTool = activeTool === 'select';
   const isEraserTool = activeTool === 'eraser';
   const isHandTool = activeTool === 'hand';
-  const canDraw = isStrokeTool || isBoxShapeTool || isLineShapeTool || isEraserTool;
+  const canDraw =
+    isStrokeTool || isBoxShapeTool || isLineShapeTool || isEraserTool;
 
+  // ── Transformer sync ──────────────────────────────────────────────────
   useEffect(() => {
     if (!transformerRef.current) return;
     const nodes = selectedIds
@@ -91,11 +94,17 @@ export function DrawingCanvas({ pageNumber, width, height, onExplainerDrawn }: D
     transformerRef.current.getLayer()?.batchDraw();
   }, [selectedIds, annotations]);
 
+  // ── Delete key ────────────────────────────────────────────────────────
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
+      if (
+        (e.key === 'Delete' || e.key === 'Backspace') &&
+        selectedIds.length > 0
+      ) {
         const active = document.activeElement;
-        const isTyping = active && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT');
+        const isTyping =
+          active &&
+          (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT');
         if (!isTyping) {
           e.preventDefault();
           deleteSelected();
@@ -106,19 +115,24 @@ export function DrawingCanvas({ pageNumber, width, height, onExplainerDrawn }: D
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedIds, deleteSelected]);
 
-const eraseAtPointer = useCallback(() => {
+  // ── Eraser ────────────────────────────────────────────────────────────
+  const eraseAtPointer = useCallback(() => {
     const stage = stageRef.current;
     const pos = stage?.getPointerPosition();
     if (!pos) return;
 
-    const RADIUS = 12;
-    const pageAnns = useAnnotationStore.getState().annotationsByPage[pageNumber] || [];
+    const RADIUS = Math.max(12, strokeWidth * 4);
+    const pageAnns =
+      useAnnotationStore.getState().annotationsByPage[pageNumber] ?? [];
 
     for (const ann of pageAnns) {
       if (ann.locked) continue;
 
-      // Stroke annotations — check distance to each line segment
-      if ('points' in ann && Array.isArray((ann as StrokeAnnotation).points)) {
+      // Stroke — check every segment
+      if (
+        'points' in ann &&
+        Array.isArray((ann as StrokeAnnotation).points)
+      ) {
         const pts = (ann as StrokeAnnotation).points;
         for (let i = 0; i < pts.length - 2; i += 2) {
           const dist = distPointToSegment(
@@ -133,8 +147,13 @@ const eraseAtPointer = useCallback(() => {
         }
       }
 
-      // Shape annotations — check bounding box
-      if ('x' in ann && 'width' in ann) {
+      // Shape — check bounding box
+      if (
+        'x' in ann &&
+        'width' in ann &&
+        ann.type !== 'text' &&
+        ann.type !== 'sticky-note'
+      ) {
         const s = ann as ShapeAnnotation;
         const inBox =
           pos.x >= s.x - RADIUS &&
@@ -147,8 +166,9 @@ const eraseAtPointer = useCallback(() => {
         }
       }
     }
-  }, [pageNumber, deleteAnnotation]);
+  }, [pageNumber, strokeWidth, deleteAnnotation]);
 
+  // ── Pointer down ──────────────────────────────────────────────────────
   const handleStageMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
       if (isSelectTool) {
@@ -161,29 +181,29 @@ const eraseAtPointer = useCallback(() => {
         return;
       }
       if (!canDraw) return;
+
       const stage = stageRef.current;
       const pos = stage?.getPointerPosition();
       if (!pos) return;
       isDrawing.current = true;
       startPoint.current = pos;
 
-      if (isStrokeTool) {
-        setCurrentPoints([pos.x, pos.y]);
-      } else if (isBoxShapeTool) {
-        setCurrentShape({ x: pos.x, y: pos.y, width: 0, height: 0 });
-      } else if (isLineShapeTool) {
-        setCurrentLine([pos.x, pos.y, pos.x, pos.y]);
-      }
+      if (isStrokeTool) setCurrentPoints([pos.x, pos.y]);
+      else if (isBoxShapeTool) setCurrentShape({ x: pos.x, y: pos.y, width: 0, height: 0 });
+      else if (isLineShapeTool) setCurrentLine([pos.x, pos.y, pos.x, pos.y]);
     },
-    [isSelectTool, isEraserTool, canDraw, isStrokeTool, isBoxShapeTool, isLineShapeTool, clearSelection, eraseAtPointer]
+    [
+      isSelectTool, isEraserTool, canDraw,
+      isStrokeTool, isBoxShapeTool, isLineShapeTool,
+      clearSelection, eraseAtPointer,
+    ]
   );
 
+  // ── Pointer move ──────────────────────────────────────────────────────
   const handlePointerMove = useCallback(() => {
     if (!isDrawing.current) return;
-    if (isEraserTool) {
-      eraseAtPointer();
-      return;
-    }
+    if (isEraserTool) { eraseAtPointer(); return; }
+
     const stage = stageRef.current;
     const pos = stage?.getPointerPosition();
     if (!pos) return;
@@ -198,14 +218,17 @@ const eraseAtPointer = useCallback(() => {
         height: Math.abs(pos.y - startPoint.current.y),
       });
     } else if (isLineShapeTool) {
-      setCurrentLine([startPoint.current.x, startPoint.current.y, pos.x, pos.y]);
+      setCurrentLine([
+        startPoint.current.x, startPoint.current.y,
+        pos.x, pos.y,
+      ]);
     }
   }, [isEraserTool, isStrokeTool, isBoxShapeTool, isLineShapeTool, eraseAtPointer]);
 
+  // ── Pointer up ────────────────────────────────────────────────────────
   const handlePointerUp = useCallback(() => {
     if (!isDrawing.current) return;
     isDrawing.current = false;
-
     if (isEraserTool) return;
 
     if (isStrokeTool && currentPoints.length >= 4) {
@@ -223,7 +246,11 @@ const eraseAtPointer = useCallback(() => {
         zIndex: annotations.length,
       };
       addAnnotation(pageNumber, newStroke);
-    } else if (isBoxShapeTool && currentShape && (currentShape.width > 2 || currentShape.height > 2)) {
+    } else if (
+      isBoxShapeTool &&
+      currentShape &&
+      (currentShape.width > 2 || currentShape.height > 2)
+    ) {
       const newShape: ShapeAnnotation = {
         id: crypto.randomUUID(),
         pageNumber,
@@ -247,7 +274,10 @@ const eraseAtPointer = useCallback(() => {
       const dx = currentLine[2] - currentLine[0];
       const dy = currentLine[3] - currentLine[1];
       if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
-        const shapeType = activeTool === 'explainer' ? 'arrow' : (activeTool as 'line' | 'arrow');
+        const shapeType =
+          activeTool === 'explainer'
+            ? 'arrow'
+            : (activeTool as 'line' | 'arrow');
         const newShape: ShapeAnnotation = {
           id: crypto.randomUUID(),
           pageNumber,
@@ -269,7 +299,11 @@ const eraseAtPointer = useCallback(() => {
         addAnnotation(pageNumber, newShape);
 
         if (activeTool === 'explainer' && onExplainerDrawn) {
-          onExplainerDrawn({ x: currentLine[2], y: currentLine[3], arrowId: newShape.id });
+          onExplainerDrawn({
+            x: currentLine[2],
+            y: currentLine[3],
+            arrowId: newShape.id,
+          });
         }
       }
     }
@@ -277,8 +311,14 @@ const eraseAtPointer = useCallback(() => {
     setCurrentPoints([]);
     setCurrentShape(null);
     setCurrentLine(null);
-  }, [currentPoints, currentShape, currentLine, pageNumber, activeTool, color, strokeWidth, opacity, isFilled, isEraserTool, isStrokeTool, isBoxShapeTool, isLineShapeTool, annotations.length, addAnnotation, onExplainerDrawn]);
+  }, [
+    currentPoints, currentShape, currentLine,
+    pageNumber, activeTool, color, strokeWidth, opacity, isFilled,
+    isEraserTool, isStrokeTool, isBoxShapeTool, isLineShapeTool,
+    annotations.length, addAnnotation, onExplainerDrawn,
+  ]);
 
+  // ── Shape interactions ────────────────────────────────────────────────
   const handleShapeClick = useCallback(
     (id: string, e: Konva.KonvaEventObject<MouseEvent>) => {
       if (!isSelectTool) return;
@@ -291,7 +331,10 @@ const eraseAtPointer = useCallback(() => {
   const handleDragEnd = useCallback(
     (id: string, e: Konva.KonvaEventObject<DragEvent>) => {
       const node = e.target;
-      updateAnnotation(pageNumber, id, { x: node.x(), y: node.y() } as Partial<Annotation>);
+      updateAnnotation(pageNumber, id, {
+        x: node.x(),
+        y: node.y(),
+      } as Partial<Annotation>);
       pushHistory();
     },
     [pageNumber, updateAnnotation, pushHistory]
@@ -306,7 +349,10 @@ const eraseAtPointer = useCallback(() => {
       node.scaleY(1);
 
       if (node.className === 'Circle') {
-        const radius = Math.max(5, (node as unknown as Konva.Circle).radius() * scaleX);
+        const radius = Math.max(
+          5,
+          (node as unknown as Konva.Circle).radius() * scaleX
+        );
         (node as unknown as Konva.Circle).radius(radius);
         updateAnnotation(pageNumber, id, {
           x: node.x() - radius,
@@ -329,11 +375,13 @@ const eraseAtPointer = useCallback(() => {
     [pageNumber, updateAnnotation, pushHistory]
   );
 
-  const registerRef = (id: string) => (node: Konva.Node | null) => {
-    if (node) shapeRefs.current[id] = node;
-    else delete shapeRefs.current[id];
-  };
+  const registerRef =
+    (id: string) => (node: Konva.Node | null) => {
+      if (node) shapeRefs.current[id] = node;
+      else delete shapeRefs.current[id];
+    };
 
+  // ── Render annotations ────────────────────────────────────────────────
   const renderAnnotation = (ann: Annotation) => {
     const isSelected = selectedIds.includes(ann.id);
     const draggable = isSelectTool && !ann.locked;
@@ -354,48 +402,98 @@ const eraseAtPointer = useCallback(() => {
           lineJoin="round"
           draggable={draggable}
           onClick={(e) => handleShapeClick(stroke.id, e)}
-          onTap={(e) => handleShapeClick(stroke.id, e as unknown as Konva.KonvaEventObject<MouseEvent>)}
+          onTap={(e) =>
+            handleShapeClick(
+              stroke.id,
+              e as unknown as Konva.KonvaEventObject<MouseEvent>
+            )
+          }
           onDragEnd={(e) => handleDragEnd(stroke.id, e)}
-          globalCompositeOperation={stroke.type === 'highlighter' ? 'multiply' : 'source-over'}
+          globalCompositeOperation={
+            stroke.type === 'highlighter' ? 'multiply' : 'source-over'
+          }
         />
       );
     }
 
-    if (('x' in ann) && ('width' in ann) && ['rectangle', 'circle', 'ellipse', 'line', 'arrow'].includes(ann.type)) {
+    if (
+      'x' in ann &&
+      'width' in ann &&
+      ['rectangle', 'circle', 'ellipse', 'line', 'arrow'].includes(ann.type)
+    ) {
       const shape = ann as ShapeAnnotation;
       const commonProps = {
         id: shape.id,
         ref: registerRef(shape.id),
         draggable,
-        onClick: (e: Konva.KonvaEventObject<MouseEvent>) => handleShapeClick(shape.id, e),
-        onTap: (e: Konva.KonvaEventObject<TouchEvent>) => handleShapeClick(shape.id, e as unknown as Konva.KonvaEventObject<MouseEvent>),
-        onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => handleDragEnd(shape.id, e),
-        onTransformEnd: (e: Konva.KonvaEventObject<Event>) => handleTransformEnd(shape.id, e),
+        onClick: (e: Konva.KonvaEventObject<MouseEvent>) =>
+          handleShapeClick(shape.id, e),
+        onTap: (e: Konva.KonvaEventObject<TouchEvent>) =>
+          handleShapeClick(
+            shape.id,
+            e as unknown as Konva.KonvaEventObject<MouseEvent>
+          ),
+        onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) =>
+          handleDragEnd(shape.id, e),
+        onTransformEnd: (e: Konva.KonvaEventObject<Event>) =>
+          handleTransformEnd(shape.id, e),
       };
+
       if (shape.type === 'rectangle') {
         return (
-          <Rect key={shape.id} {...commonProps} x={shape.x} y={shape.y} width={shape.width} height={shape.height}
-            rotation={shape.rotation} stroke={isSelected ? '#C8732A' : shape.color} strokeWidth={shape.strokeWidth}
-            fill={shape.fill} opacity={shape.opacity} />
+          <Rect
+            key={shape.id}
+            {...commonProps}
+            x={shape.x} y={shape.y}
+            width={shape.width} height={shape.height}
+            rotation={shape.rotation}
+            stroke={isSelected ? '#C8732A' : shape.color}
+            strokeWidth={shape.strokeWidth}
+            fill={shape.fill}
+            opacity={shape.opacity}
+          />
         );
       }
       if (shape.type === 'circle' || shape.type === 'ellipse') {
         return (
-          <Circle key={shape.id} {...commonProps} x={shape.x + shape.width / 2} y={shape.y + shape.height / 2}
-            radius={Math.max(shape.width, shape.height) / 2} rotation={shape.rotation}
-            stroke={isSelected ? '#C8732A' : shape.color} strokeWidth={shape.strokeWidth} fill={shape.fill} opacity={shape.opacity} />
+          <Circle
+            key={shape.id}
+            {...commonProps}
+            x={shape.x + shape.width / 2}
+            y={shape.y + shape.height / 2}
+            radius={Math.max(shape.width, shape.height) / 2}
+            rotation={shape.rotation}
+            stroke={isSelected ? '#C8732A' : shape.color}
+            strokeWidth={shape.strokeWidth}
+            fill={shape.fill}
+            opacity={shape.opacity}
+          />
         );
       }
       if (shape.type === 'line' && shape.points) {
         return (
-          <Line key={shape.id} {...commonProps} points={shape.points} stroke={isSelected ? '#C8732A' : shape.color}
-            strokeWidth={shape.strokeWidth} opacity={shape.opacity} lineCap="round" />
+          <Line
+            key={shape.id}
+            {...commonProps}
+            points={shape.points}
+            stroke={isSelected ? '#C8732A' : shape.color}
+            strokeWidth={shape.strokeWidth}
+            opacity={shape.opacity}
+            lineCap="round"
+          />
         );
       }
       if (shape.type === 'arrow' && shape.points) {
         return (
-          <Arrow key={shape.id} {...commonProps} points={shape.points} stroke={isSelected ? '#C8732A' : shape.color}
-            fill={isSelected ? '#C8732A' : shape.color} strokeWidth={shape.strokeWidth} opacity={shape.opacity} />
+          <Arrow
+            key={shape.id}
+            {...commonProps}
+            points={shape.points}
+            stroke={isSelected ? '#C8732A' : shape.color}
+            fill={isSelected ? '#C8732A' : shape.color}
+            strokeWidth={shape.strokeWidth}
+            opacity={shape.opacity}
+          />
         );
       }
     }
@@ -413,7 +511,7 @@ const eraseAtPointer = useCallback(() => {
       onTouchStart={handleStageMouseDown}
       onTouchMove={handlePointerMove}
       onTouchEnd={handlePointerUp}
-     style={{
+      style={{
         position: 'absolute',
         top: 0,
         left: 0,
@@ -426,29 +524,57 @@ const eraseAtPointer = useCallback(() => {
         {annotations.map(renderAnnotation)}
 
         {currentPoints.length > 0 && (
-          <Line points={currentPoints} stroke={color} strokeWidth={activeTool === 'highlighter' ? strokeWidth * 4 : strokeWidth}
-            opacity={activeTool === 'highlighter' ? 0.4 : opacity} tension={0.4} lineCap="round" lineJoin="round" />
+          <Line
+            points={currentPoints}
+            stroke={color}
+            strokeWidth={
+              activeTool === 'highlighter' ? strokeWidth * 4 : strokeWidth
+            }
+            opacity={activeTool === 'highlighter' ? 0.4 : opacity}
+            tension={0.4}
+            lineCap="round"
+            lineJoin="round"
+          />
         )}
 
         {currentShape && activeTool === 'rectangle' && (
-          <Rect x={currentShape.x} y={currentShape.y} width={currentShape.width} height={currentShape.height}
-            stroke={color} strokeWidth={strokeWidth} dash={[6, 4]} />
+          <Rect
+            x={currentShape.x} y={currentShape.y}
+            width={currentShape.width} height={currentShape.height}
+            stroke={color} strokeWidth={strokeWidth} dash={[6, 4]}
+          />
         )}
         {currentShape && (activeTool === 'circle' || activeTool === 'ellipse') && (
-          <Circle x={currentShape.x + currentShape.width / 2} y={currentShape.y + currentShape.height / 2}
-            radius={Math.max(currentShape.width, currentShape.height) / 2} stroke={color} strokeWidth={strokeWidth} dash={[6, 4]} />
+          <Circle
+            x={currentShape.x + currentShape.width / 2}
+            y={currentShape.y + currentShape.height / 2}
+            radius={Math.max(currentShape.width, currentShape.height) / 2}
+            stroke={color} strokeWidth={strokeWidth} dash={[6, 4]}
+          />
         )}
-
-        {currentLine && (activeTool === 'line') && (
-          <Line points={currentLine} stroke={color} strokeWidth={strokeWidth} dash={[6, 4]} lineCap="round" />
+        {currentLine && activeTool === 'line' && (
+          <Line
+            points={currentLine}
+            stroke={color} strokeWidth={strokeWidth}
+            dash={[6, 4]} lineCap="round"
+          />
         )}
         {currentLine && (activeTool === 'arrow' || activeTool === 'explainer') && (
-          <Arrow points={currentLine} stroke={color} fill={color} strokeWidth={strokeWidth} dash={[6, 4]} />
+          <Arrow
+            points={currentLine}
+            stroke={color} fill={color}
+            strokeWidth={strokeWidth} dash={[6, 4]}
+          />
         )}
 
         {isSelectTool && (
-          <Transformer ref={transformerRef} rotateEnabled
-            boundBoxFunc={(oldBox, newBox) => (newBox.width < 5 || newBox.height < 5 ? oldBox : newBox)} />
+          <Transformer
+            ref={transformerRef}
+            rotateEnabled
+            boundBoxFunc={(oldBox, newBox) =>
+              newBox.width < 5 || newBox.height < 5 ? oldBox : newBox
+            }
+          />
         )}
       </Layer>
     </Stage>

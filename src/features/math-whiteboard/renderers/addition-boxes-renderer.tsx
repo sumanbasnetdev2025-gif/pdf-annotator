@@ -56,7 +56,7 @@ function AdditionBoxesRow({
     .sort((x, y) => x.col - y.col);
 
   // Right-align operands and carry row to the answer grid's right edge.
-  const operandShift = (answerColumns - columnCount) * (CELL + GAP);
+  const operandShift = Math.max(0, answerColumns - columnCount) * (CELL + GAP);
 
   // Grid width (digits only, excluding the + gutter).
   const gridWidth = answerColumns * CELL + (answerColumns - 1) * GAP;
@@ -94,7 +94,7 @@ function AdditionBoxesRow({
               height: CARRY_H,
             }}
           >
-            {Array.from({ length: columnCount }).map((_, c) => {
+            {Array.from({ length: columnCount }, (_, c) => c).map((c) => {
               const bx = carryBoxes.find((x) => x.col === c);
               return (
                 <div key={`carry-${c}`} style={{ width: CELL }}>

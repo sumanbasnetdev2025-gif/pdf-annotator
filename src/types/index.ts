@@ -37,15 +37,14 @@ export interface BaseAnnotation {
 }
 
 export interface StrokeAnnotation extends BaseAnnotation {
-  type: 'pen' | 'pencil' | 'highlighter' | 'marker' | 'eraser';
+  type: 'pen' | 'pencil' | 'highlighter';
   points: number[];
   color: string;
   strokeWidth: number;
-  dash?: number[];
 }
 
 export interface ShapeAnnotation extends BaseAnnotation {
-  type: 'rectangle' | 'circle' | 'ellipse' | 'line' | 'arrow' | 'polygon';
+  type: 'rectangle' | 'circle' | 'ellipse' | 'line' | 'arrow';
   x: number;
   y: number;
   width: number;
@@ -54,10 +53,9 @@ export interface ShapeAnnotation extends BaseAnnotation {
   color: string;
   strokeWidth: number;
   fill?: string;
-  dash?: number[];
+  filled?: boolean;
   rotation: number;
 }
-
 export interface TextAnnotation extends BaseAnnotation {
   type: 'text' | 'sticky-note';
   x: number;
@@ -99,4 +97,17 @@ export interface PdfDocument {
   fileData: ArrayBuffer;
   lastOpenedAt: number;
   createdAt: number;
+}
+export interface RecentFile {
+  id: string;
+  name: string;
+  size: number;
+  lastOpened: number;
+  thumbnailDataUrl: string | null;
+  fileData: ArrayBuffer;
+}
+
+export interface UploadError {
+  type: 'invalid-type' | 'too-large' | 'corrupted' | 'unknown';
+  message: string;
 }
