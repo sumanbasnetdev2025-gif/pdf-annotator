@@ -387,11 +387,16 @@ const tools = [
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        <main
-            ref={mainScrollRef}
-            className="flex flex-1 overflow-auto px-2 py-4 sm:px-8 sm:py-8"
-            style={{ overscrollBehavior: 'contain' }}
-          >
+    <main
+  ref={mainScrollRef}
+  className="flex flex-1 overflow-auto px-2 py-4 sm:px-8 sm:py-8"
+  style={{
+    overscrollBehavior: 'contain',
+    touchAction: activeTool === 'hand' || activeTool === 'select'
+      ? 'auto'
+      : 'none',
+  }}
+>
             {isLoading && (
               <div className="flex w-full items-center justify-center gap-2 text-[#6B6862]">
                 <Loader2 className="h-5 w-5 animate-spin" />
