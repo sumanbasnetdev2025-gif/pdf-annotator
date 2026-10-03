@@ -1,9 +1,13 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["pdfjs-dist", "canvas"],
+  reactStrictMode: true,
+
+  serverExternalPackages: ['pdfjs-dist', 'canvas'],
+
   webpack: (config) => {
     config.resolve.alias.canvas = false;
+    config.resolve.alias.encoding = false;
     return config;
   },
 };

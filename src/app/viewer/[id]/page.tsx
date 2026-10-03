@@ -31,7 +31,6 @@ import {FloatingViewer} from '@/features/pip/floating-viewer';
 import { usePip } from '@/hooks/use-pip';
 import { usePinchZoom } from '@/hooks/use-pinch-zoom';
 import '@/lib/pdf-worker';
-import { bytesFor } from 'pdf-lib/cjs/utils/numbers';
 
 export default function ViewerPage() {
   const params = useParams<{ id: string }>();
